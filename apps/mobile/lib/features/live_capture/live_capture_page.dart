@@ -80,7 +80,7 @@ class _LiveCapturePageState extends State<LiveCapturePage> {
     try {
       final cameras = await availableCameras();
       _camera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraDirection.back,
+        (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
       );
       final controller = CameraController(
@@ -179,8 +179,9 @@ class _LiveCapturePageState extends State<LiveCapturePage> {
 
   Map<String, Object> _planeMap(Plane plane) => {
     'bytes': plane.bytes,
-    'rowStride': plane.rowStride,
-    'pixelStride': plane.pixelStride,
+    'rowStride': plane.bytesPerRow,
+    // YUV_420_888: 1 (Y) 或 2 (interleaved chroma)；iOS 上为 null，按 1 处理。
+    'pixelStride': plane.bytesPerPixel ?? 1,
     'offset': 0,
   };
 

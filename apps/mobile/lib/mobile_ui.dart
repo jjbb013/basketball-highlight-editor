@@ -873,13 +873,12 @@ class _LiveCaptureEntry extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      l10n?.liveCaptureTitle ?? '实时拍摄',
+                      '实时拍摄',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      l10n?.liveCaptureDescription ??
-                          '打开相机边录边分析，进球即时提示；录完自动进入审核导出流程。',
+                      '打开相机边录边分析，进球即时提示；录完自动进入审核导出流程。',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
