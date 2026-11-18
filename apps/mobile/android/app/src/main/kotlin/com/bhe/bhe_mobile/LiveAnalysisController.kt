@@ -157,8 +157,8 @@ class LiveAnalysisController(private val context: Context) {
             result.success(mapOf("queued" to false, "dropped" to droppedFrames))
             return
         }
-        val args = call.arguments<Map<String, Any?>>()
-        val timeMs = (args?.get("timeMs") as? Number)?.toLong() ?: 0L
+        val args = call.arguments<Map<String, Any?>>() ?: emptyMap()
+        val timeMs = (args["timeMs"] as? Number)?.toLong() ?: 0L
         val width = (args["width"] as? Number)?.toInt() ?: 0
         val height = (args["height"] as? Number)?.toInt() ?: 0
         val rotation = (args["rotationDegrees"] as? Number)?.toInt() ?: 0
