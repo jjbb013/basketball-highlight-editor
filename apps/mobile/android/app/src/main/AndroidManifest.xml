@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
-        android:label="BHE"
+        android:label="LiveBHE"
         android:name=".BheApplication"
         android:icon="@mipmap/ic_launcher">
         <uses-native-library
