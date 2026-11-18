@@ -1,0 +1,133 @@
+name: Live capture APK
+
+# 构建 feature/live-capture 分支的可安装 APK（arm64-v8a）。
+# 复用 release-packages.yml 的 Android 构建链路，但不上传 Release、
+# 不依赖签名 keystore secret（使用 Gradle 自动生成的调试证书）。
+
+on:
+  push:
+    branches:
+      - "feature/live-capture"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: "3.44.8"
+  ANDROID_NDK_VERSION: "27.0.12077973"
+  ONNXRUNTIME_VERSION: "1.28.0"
+  ONNXRUNTIME_ANDROID_QNN_SHA256: "f3e760fa1459b42a89fdd606679477620f68e97035ae96db9f9d128b34607a84"
+  QNN_RUNTIME_VERSION: "2.42.0"
+  QNN_RUNTIME_SHA256: "ecb69bd6a7b1be4717ef10805199fb49ec6b60ca3f481d3068ed9605fba91d5b"
+
+jobs:
+  android-live-apk:
+    name: Android live-capture APK (arm64-v8a)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Set up Python for ONNX export
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android NDK
+        run: sdkmanager "ndk;${ANDROID_NDK_VERSION}"
+
+      - name: Set up Rust Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Export mobile ONNX model
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt onnx
+          python scripts/export_mobile_model.py \
+            --model models/bball_model.pt \
+            --output apps/mobile/assets/models/bball_model.onnx
+          test -s apps/mobile/assets/models/bball_model.onnx
+
+      - name: Download ONNX Runtime Android library
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/onnxruntime-android.aar"
+          runtime_dir="$RUNNER_TEMP/onnxruntime-android"
+          url="https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android-qnn/${ONNXRUNTIME_VERSION}/onnxruntime-android-qnn-${ONNXRUNTIME_VERSION}.aar"
+          curl --fail --location --retry 3 --retry-delay 2 "$url" -o "$archive"
+          echo "${ONNXRUNTIME_ANDROID_QNN_SHA256}  $archive" | sha256sum -c -
+          mkdir -p "$runtime_dir"
+          unzip -q "$archive" -d "$runtime_dir"
+          test -f "$runtime_dir/jni/arm64-v8a/libonnxruntime.so"
+          mkdir -p "$runtime_dir/arm64-v8a"
+          cp "$runtime_dir/jni/arm64-v8a/libonnxruntime.so" "$runtime_dir/arm64-v8a/"
+          echo "BHE_ORT_ANDROID_DIR=$runtime_dir" >> "$GITHUB_ENV"
+
+      - name: Download Qualcomm QNN runtime libraries
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/qnn-runtime.aar"
+          qnn_dir="$RUNNER_TEMP/qnn-runtime"
+          url="https://repo1.maven.org/maven2/com/qualcomm/qti/qnn-runtime/${QNN_RUNTIME_VERSION}/qnn-runtime-${QNN_RUNTIME_VERSION}.aar"
+          curl --fail --location --retry 3 --retry-delay 2 "$url" -o "$archive"
+          echo "${QNN_RUNTIME_SHA256}  $archive" | sha256sum -c -
+          mkdir -p "$qnn_dir"
+          unzip -q "$archive" -d "$qnn_dir"
+          mkdir -p "$qnn_dir/arm64-v8a"
+          cp "$qnn_dir"/jni/arm64-v8a/lib*.so "$qnn_dir/arm64-v8a/"
+          echo "BHE_QNN_ANDROID_DIR=$qnn_dir" >> "$GITHUB_ENV"
+
+      - name: Build Rust Android Runtime
+        run: BHE_ANDROID_NDK="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" scripts/build_mobile_runtime.sh
+
+      - name: Install Flutter dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+
+      - name: Build Android package
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          flutter build apk --release \
+            --build-name="0.2.0-live.1" \
+            --build-number="${GITHUB_RUN_NUMBER}" \
+            --dart-define=BHE_VERSION="0.2.0+live.${GITHUB_RUN_NUMBER}"
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          test -s "$apk"
+          # 冒烟检查：实时功能依赖的原生库与模型都在包里。
+          for library in libbhe_runtime.so libbhe_runtime_jni.so libonnxruntime.so; do
+            unzip -p "$apk" "lib/arm64-v8a/$library" > "$RUNNER_TEMP/$library"
+            test -s "$RUNNER_TEMP/$library"
+          done
+          aapt2_bin="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/aapt2"
+          permissions="$("$aapt2_bin" dump permissions "$apk")"
+          grep -q "name='android.permission.CAMERA'" <<< "$permissions"
+          grep -q "name='android.permission.RECORD_AUDIO'" <<< "$permissions"
+          grep -q "name='android.permission.INTERNET'" <<< "$permissions"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp "$apk" "$GITHUB_WORKSPACE/dist/BHE-live-capture-arm64-v8a.apk"
+          cd "$GITHUB_WORKSPACE/dist"
+          sha256sum "BHE-live-capture-arm64-v8a.apk" > "BHE-live-capture-arm64-v8a.apk.sha256"
+
+      - name: Upload live APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BHE-live-capture-apk
+          path: |
+            dist/BHE-live-capture-arm64-v8a.apk
+            dist/BHE-live-capture-arm64-v8a.apk.sha256
+          if-no-files-found: error

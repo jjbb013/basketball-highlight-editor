@@ -60,6 +60,9 @@ class MainActivity : FlutterActivity() {
     private val analysisChannelName = "com.bhe.bhe/mobile_analysis"
     private val progressChannelName = "com.bhe.bhe/mobile_analysis_progress"
     private val updateChannelName = "com.bhe.bhe/mobile_update"
+    private val liveAnalysisChannelName = "com.bhe.bhe/live_analysis"
+    private val liveAnalysisEventsChannelName = "com.bhe.bhe/live_analysis_events"
+    private var liveAnalysisController: LiveAnalysisController? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val exportCancelled = ConcurrentHashMap<String, AtomicBoolean>()
     private val mergeTransactions = ConcurrentHashMap<String, MergeOutputTransaction>()
@@ -68,6 +71,8 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         setAnalysisScreenOn(false)
+        liveAnalysisController?.dispose()
+        liveAnalysisController = null
         analysisTaskListener?.let(AnalysisTaskManager::detach)
         analysisTaskListener = null
         exportCancelled.forEach { (id, flag) -> flag.set(true); ExportPathRegistry.releaseIdle(id) }
@@ -122,7 +127,33 @@ class MainActivity : FlutterActivity() {
                 override fun onCancel(arguments: Any?) {
                     progressSink = null
                 }
-        })
+            })
+
+        val liveController = LiveAnalysisController(applicationContext)
+        liveAnalysisController = liveController
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, liveAnalysisChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> liveController.start(call, result)
+                    "pushFrame" -> liveController.pushFrame(call, result)
+                    "playGoalTone" -> {
+                        liveController.playGoalTone()
+                        result.success(null)
+                    }
+                    "stop" -> liveController.stop(result)
+                    else -> result.notImplemented()
+                }
+            }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, liveAnalysisEventsChannelName)
+            .setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    liveController.attachSink(events)
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    liveController.attachSink(null)
+                }
+            })
     }
 
     /// 交给系统安装器；没有「安装未知应用」权限时先打开设置页让用户允许。

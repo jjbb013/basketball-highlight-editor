@@ -1515,6 +1515,36 @@ class MobileAppState extends ChangeNotifier with MobileDiagnosticState {
     await _prepareVideo(picked.path, name: picked.name, projectIntent: intent);
   }
 
+  /// 导入实时拍摄页录制的视频：与 [pickVideo] 同一流程，只是视频路径已知。
+  Future<void> importRecordedVideo(String path, {String? name}) async {
+    final intent = _projectIntent, id = project.id, session = _projectSession;
+    if (analysing) await cancelAnalysis();
+    if (!_isProjectIntent(intent) ||
+        project.id != id ||
+        _projectSession != session) {
+      return;
+    }
+    _invalidateVideoPreparation();
+    try {
+      await _prepareVideo(
+        path,
+        name: name ?? path.split(Platform.pathSeparator).last,
+        projectIntent: intent,
+      );
+    } on Object catch (error, stack) {
+      if (!_isProjectIntent(intent)) {
+        MobileDiagnostics.instance.error(
+          error,
+          stack,
+          operation: 'video.recorded',
+        );
+        return;
+      }
+      recordDiagnosticFailure(error, stack, operation: 'video.recorded');
+      notifyListeners();
+    }
+  }
+
   Future<({String path, String name})?> _pickVideo() async {
     final result = await _pickFiles(type: FileType.video, kind: 'video');
     final file = result?.files.single;

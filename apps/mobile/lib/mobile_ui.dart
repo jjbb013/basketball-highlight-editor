@@ -25,6 +25,7 @@ import 'features/diagnostics/mobile_diagnostics.dart';
 import 'features/diagnostics/diagnostic_report.dart';
 import 'mobile_theme.dart';
 import 'features/game_stats/game_stats.dart';
+import 'features/live_capture/live_capture_page.dart';
 
 export 'mobile_theme.dart' show BhePalette, bheTheme;
 
@@ -725,9 +726,15 @@ class _ProjectView extends StatelessWidget {
             if (state.preparingVideo)
               _VideoPreparationCard(message: state.preparingVideoMessage, onCancel: state.cancelVideoPreparation)
             else if (state.project.video == null)
-              _EmptyProject(
-                enabled: !state.pickerBusy,
-                onPick: () { unawaited(_createManagedProject(context, state)); },
+              Column(
+                children: [
+                  _EmptyProject(
+                    enabled: !state.pickerBusy,
+                    onPick: () { unawaited(_createManagedProject(context, state)); },
+                  ),
+                  const SizedBox(height: 12),
+                  _LiveCaptureEntry(state: state),
+                ],
               )
             else
               _ProjectSetup(state: state, onOpenReview: onOpenReview),
@@ -824,6 +831,63 @@ class _EmptyProject extends StatelessWidget {
               label: Text(l10n?.selectVideo ?? '选择视频'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveCaptureEntry extends StatelessWidget {
+  const _LiveCaptureEntry({required this.state});
+
+  final MobileAppState state;
+
+  Future<void> _openLiveCapture(BuildContext context) async {
+    if (!context.mounted) return;
+    final videoPath = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(builder: (_) => const LiveCapturePage()),
+    );
+    if (videoPath == null || !context.mounted) return;
+    unawaited(state.importRecordedVideo(videoPath));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = Localizations.of<BheLocalizations>(context, BheLocalizations);
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: state.pickerBusy ? null : () { unawaited(_openLiveCapture(context)); },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          child: Row(
+            children: [
+              const Icon(
+                LucideIcons.video,
+                size: 26,
+                color: BhePalette.orange,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n?.liveCaptureTitle ?? '实时拍摄',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n?.liveCaptureDescription ??
+                          '打开相机边录边分析，进球即时提示；录完自动进入审核导出流程。',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
         ),
       ),
     );
