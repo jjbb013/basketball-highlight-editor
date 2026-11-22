@@ -363,6 +363,38 @@ void main() {
   });
 
   test(
+    'EngineSession forwards presentation and historical project selections',
+    () async {
+      final transport = _FakeEngineTransport()
+        ..responses['start_export'] = {
+          'job': {'id': 'job-export-2', 'state': 'queued'},
+        };
+      final session = EngineSession(transport);
+      final presentation = <String, dynamic>{
+        'cover': {'enabled': true, 'duration_ms': 3000, 'style': 'court'},
+        'audio': {'enabled': true, 'track': 'electronic_drive', 'volume': 0.2},
+      };
+      final sources = <Map<String, dynamic>>[
+        {'project_root': '/tmp/day-two'},
+      ];
+      await session.startExport(
+        projectRoot: '/tmp/project',
+        mode: 'merge_by_player',
+        outputDir: '/tmp/out',
+        presentation: presentation,
+        sourceProjects: sources,
+      );
+      expect(transport.payloads.single, {
+        'project_root': '/tmp/project',
+        'mode': 'merge_by_player',
+        'output_dir': '/tmp/out',
+        'presentation': presentation,
+        'source_projects': sources,
+      });
+    },
+  );
+
+  test(
     'EngineSession forwards start review command and candidate id',
     () async {
       final transport = _FakeEngineTransport()

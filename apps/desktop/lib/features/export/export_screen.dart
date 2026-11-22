@@ -23,9 +23,12 @@ import '../../providers/export_output_picker.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/tokens.dart';
 import 'game_stats.dart';
+import 'export_presentation.dart';
 
 @visibleForTesting
-final exportDialogLogProvider = Provider<void Function(String, String, String)>((ref) => appLog);
+final exportDialogLogProvider = Provider<void Function(String, String, String)>(
+  (ref) => appLog,
+);
 
 /// Export 屏:汇总当前保留片段 + 合并/分别导出 CTA + 历史。
 ///
@@ -50,6 +53,8 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   final _guideStartKey = GlobalKey();
   String _mode = 'merge';
   String _effect = 'none';
+  Map<String, dynamic> _presentation = defaultExportPresentation();
+  final List<String> _sourceProjectRoots = <String>[];
 
   static const _effectKey = 'export_goal_effect';
 
@@ -58,7 +63,10 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
     super.initState();
     SharedPreferences.getInstance().then((prefs) {
       final saved = prefs.getString(_effectKey);
-      if (mounted && saved != null && saved != _effect && _kEffects.contains(saved)) {
+      if (mounted &&
+          saved != null &&
+          saved != _effect &&
+          _kEffects.contains(saved)) {
         setState(() => _effect = saved);
       }
     });
@@ -67,7 +75,9 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   void _setEffect(String value) {
     appLog('info', 'export', '选择效果 $value');
     setState(() => _effect = value);
-    SharedPreferences.getInstance().then((prefs) => prefs.setString(_effectKey, value));
+    SharedPreferences.getInstance().then(
+      (prefs) => prefs.setString(_effectKey, value),
+    );
   }
 
   void _selectMode(String mode) {
@@ -82,8 +92,14 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         title: Text(context.bheText('允许再次导出？')),
         content: Text(context.bheText('请先检查导出任务和已生成的文件。上一次导出可能仍在运行或已经完成。')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(context.bheText('取消'))),
-          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(context.bheText('已检查，允许再次导出'))),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.bheText('取消')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.bheText('已检查，允许再次导出')),
+          ),
         ],
       ),
     );
@@ -227,6 +243,19 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
           ),
           const SizedBox(height: Spacing.md),
         ],
+        _ExportSection(
+          title: context.bheText('历史项目'),
+          hint: context.bheText('可多选，按同名球员合并'),
+          child: ExportProjectSources(
+            roots: _sourceProjectRoots,
+            onChanged: (roots) => setState(() {
+              _sourceProjectRoots
+                ..clear()
+                ..addAll(roots);
+            }),
+          ),
+        ),
+        const SizedBox(height: Spacing.md),
         Text(
           l10n?.exportOutputMode ?? '输出方式',
           style: theme.textTheme.titleSmall,
@@ -235,48 +264,48 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         KeyedSubtree(
           key: _guideModeKey,
           child: Row(
-          children: [
-            Expanded(
-              child: _ModeCard(
-                key: const Key('export-mode-merge'),
-                title: l10n?.exportMergeTitle ?? '合并成一个视频',
-                description:
-                    l10n?.exportMergeDescription ?? '按时间顺序拼接为一个 MP4，适合直接分享。',
-                selected: mode == 'merge',
-                onTap: () => _selectMode('merge'),
+            children: [
+              Expanded(
+                child: _ModeCard(
+                  key: const Key('export-mode-merge'),
+                  title: l10n?.exportMergeTitle ?? '合并成一个视频',
+                  description:
+                      l10n?.exportMergeDescription ?? '按时间顺序拼接为一个 MP4，适合直接分享。',
+                  selected: mode == 'merge',
+                  onTap: () => _selectMode('merge'),
+                ),
               ),
-            ),
-            const SizedBox(width: Spacing.sm),
-            Expanded(
-              child: _ModeCard(
-                key: const Key('export-mode-separate'),
-                title: l10n?.exportSeparateTitle ?? '每个片段单独导出',
-                description:
-                    l10n?.exportSeparateDescription ??
-                    '每段一个文件，放进同一个文件夹，适合二次剪辑。',
-                selected: mode == 'separate',
-                onTap: () => _selectMode('separate'),
-              ),
-            ),
-            if (state.players.isNotEmpty) ...[
               const SizedBox(width: Spacing.sm),
               Expanded(
-                child: KeyedSubtree(
-                  key: _guideTagModeKey,
-                  child: _ModeCard(
-                  key: const Key('export-mode-by-player'),
-                  title: context.bheText('每个标签各合成一个视频'),
-                  description: context.bheText(
-                    '只导出选中的标签，每个标签一个 MP4，文件名就是标签名，放进同一个文件夹。',
-                  ),
-                  selected: mode == 'merge_by_player',
-                  onTap: () => _selectMode('merge_by_player'),
-                ),
+                child: _ModeCard(
+                  key: const Key('export-mode-separate'),
+                  title: l10n?.exportSeparateTitle ?? '每个片段单独导出',
+                  description:
+                      l10n?.exportSeparateDescription ??
+                      '每段一个文件，放进同一个文件夹，适合二次剪辑。',
+                  selected: mode == 'separate',
+                  onTap: () => _selectMode('separate'),
                 ),
               ),
+              if (state.players.isNotEmpty) ...[
+                const SizedBox(width: Spacing.sm),
+                Expanded(
+                  child: KeyedSubtree(
+                    key: _guideTagModeKey,
+                    child: _ModeCard(
+                      key: const Key('export-mode-by-player'),
+                      title: context.bheText('每个标签各合成一个视频'),
+                      description: context.bheText(
+                        '只导出选中的标签，每个标签一个 MP4，文件名就是标签名，放进同一个文件夹。',
+                      ),
+                      selected: mode == 'merge_by_player',
+                      onTap: () => _selectMode('merge_by_player'),
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
-        ),
+          ),
         ),
         const SizedBox(height: Spacing.md),
         _ExportSection(
@@ -294,6 +323,15 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
                   onTap: busy ? null : () => _setEffect(option.value),
                 ),
             ],
+          ),
+        ),
+        const SizedBox(height: Spacing.sm),
+        _ExportSection(
+          title: context.bheText('封面与背景音乐'),
+          hint: context.bheText('默认 3 秒封面、20% 音乐音量，可自定义'),
+          child: ExportPresentationPanel(
+            value: _presentation,
+            onChanged: (value) => setState(() => _presentation = value),
           ),
         ),
         const SizedBox(height: Spacing.sm),
@@ -332,8 +370,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
           const SizedBox(height: Spacing.sm),
           _ExportNotice(
             color: c.warning,
-            text:
-                l10n?.analysisStillRunning ?? '视频仍在分析，分析完成后才能导出新的候选结果。',
+            text: l10n?.analysisStillRunning ?? '视频仍在分析，分析完成后才能导出新的候选结果。',
           ),
         ],
         if (state.analysisMode == 'fast' && _showFastRisk) ...[
@@ -376,17 +413,22 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
             color: c.warning,
             text: context.bheText('上一次导出启动结果未确认，请先查看导出任务'),
           ),
-          Wrap(spacing: Spacing.sm, children: [
-            TextButton(
-              key: const Key('export-check-unknown'),
-              onPressed: state.busy ? null : notifier.checkUnconfirmedExport,
-              child: Text(context.bheText('查看导出任务')),
-            ),
-            TextButton(
-              onPressed: state.busy ? null : () => _confirmUncertainExport(notifier),
-              child: Text(context.bheText('已检查，允许再次导出')),
-            ),
-          ]),
+          Wrap(
+            spacing: Spacing.sm,
+            children: [
+              TextButton(
+                key: const Key('export-check-unknown'),
+                onPressed: state.busy ? null : notifier.checkUnconfirmedExport,
+                child: Text(context.bheText('查看导出任务')),
+              ),
+              TextButton(
+                onPressed: state.busy
+                    ? null
+                    : () => _confirmUncertainExport(notifier),
+                child: Text(context.bheText('已检查，允许再次导出')),
+              ),
+            ],
+          ),
         ],
         const SizedBox(height: Spacing.lg),
         Wrap(
@@ -397,18 +439,19 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
             KeyedSubtree(
               key: _guideStartKey,
               child: CsButton(
-              key: const Key('export-start'),
-              label: Text(
-                l10n?.exportStartButton(includedCount) ??
-                    '导出 $includedCount 个片段',
+                key: const Key('export-start'),
+                label: Text(
+                  l10n?.exportStartButton(includedCount) ??
+                      '导出 $includedCount 个片段',
+                ),
+                icon: LucideIcons.download,
+                size: CsButtonSize.lg,
+                isLoading: busy,
+                onPressed:
+                    includedCount > 0 && !busy && !state.exportStartUnconfirmed
+                    ? () => _chooseOutput(notifier, mode: mode)
+                    : null,
               ),
-              icon: LucideIcons.download,
-              size: CsButtonSize.lg,
-              isLoading: busy,
-              onPressed: includedCount > 0 && !busy && !state.exportStartUnconfirmed
-                  ? () => _chooseOutput(notifier, mode: mode)
-                  : null,
-            ),
             ),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 300),
@@ -479,8 +522,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
               icon: LucideIcons.history,
               title: l10n?.text('还没有导出记录') ?? '还没有导出记录',
               description:
-                  l10n?.text('完成一次导出后，历史记录会出现在这里。') ??
-                  '完成一次导出后，历史记录会出现在这里。',
+                  l10n?.text('完成一次导出后，历史记录会出现在这里。') ?? '完成一次导出后，历史记录会出现在这里。',
             ),
           ),
       ],
@@ -510,45 +552,43 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         ),
       ],
       child: LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 1000;
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(Spacing.xl),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1240),
-              child: wide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(flex: 6, child: settings),
-                        const SizedBox(width: Spacing.xl),
-                        Expanded(flex: 5, child: history),
-                      ],
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        settings,
-                        const SizedBox(height: Spacing.xxl),
-                        history,
-                      ],
-                    ),
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 1000;
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(Spacing.xl),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1240),
+                child: wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 6, child: settings),
+                          const SizedBox(width: Spacing.xl),
+                          Expanded(flex: 5, child: history),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          settings,
+                          const SizedBox(height: Spacing.xxl),
+                          history,
+                        ],
+                      ),
+              ),
             ),
-          ),
-        );
-      },
-    ),
+          );
+        },
+      ),
     );
   }
 
-  int _playerCount(ProjectState state, String? playerId) => state.candidates
-      .where(_isIncluded)
-      .where((item) {
+  int _playerCount(ProjectState state, String? playerId) =>
+      state.candidates.where(_isIncluded).where((item) {
         final id = item['player_id']?.toString();
         return playerId == null ? id == null || id.isEmpty : id == playerId;
-      })
-      .length;
+      }).length;
 
   void _resetPlayerFilter() {
     _playerFilterActive = false;
@@ -596,28 +636,41 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
           // Diagnostics are best effort and must not block the picker.
         }
       }
+
       log('info', '选择输出位置开始 mode=$mode');
       final videoId = ref.read(projectProvider).video?['id'];
-      final playerIds = _playerFilterActive ? _selectedPlayerIds.toList() : null;
+      final playerIds = _playerFilterActive
+          ? _selectedPlayerIds.toList()
+          : null;
       final includeUnassigned = _playerFilterActive ? _includeUnassigned : null;
       final picker = ref.read(exportOutputPickerProvider);
       final path = await ref
           .read(playbackCoordinatorProvider)
-          .withNativeDialog(() async {
-            if (!mounted || !TickerMode.valuesOf(context).enabled) return null;
-            return merge
-                ? picker.mergedPath(
-                    typeLabel: context.bheText('视频'),
-                    projectName: ref.read(projectProvider).statistics?['project']?['name']?.toString() ?? 'Project',
-                  )
-                : picker.directory(confirmLabel: context.bheText('选择输出目录'));
-          }, onPrepareTimeout: () {
-            log('warn', '准备阶段超过时限，直接弹出选择框');
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(context.bheText('视频画面准备较慢，已直接打开选择窗口'))),
-            );
-          });
+          .withNativeDialog(
+            () async {
+              if (!mounted || !TickerMode.valuesOf(context).enabled) {
+                return null;
+              }
+              return merge
+                  ? picker.mergedPath(
+                      typeLabel: context.bheText('视频'),
+                      projectName:
+                          ref
+                              .read(projectProvider)
+                              .statistics?['project']?['name']
+                              ?.toString() ??
+                          'Project',
+                    )
+                  : picker.directory(confirmLabel: context.bheText('选择输出目录'));
+            },
+            onPrepareTimeout: () {
+              log('warn', '准备阶段超过时限，直接弹出选择框');
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(context.bheText('视频画面准备较慢，已直接打开选择窗口'))),
+              );
+            },
+          );
       if (!mounted ||
           path == null ||
           ref.read(projectProvider).video?['id'] != videoId) {
@@ -630,10 +683,18 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         outputDir: merge ? null : path,
         playerIds: playerIds,
         includeUnassigned: includeUnassigned,
+        presentation: _presentation,
+        sourceProjects: [
+          for (final root in _sourceProjectRoots) {'project_root': root},
+        ],
       );
     } catch (error) {
       try {
-        ref.read(exportDialogLogProvider)('error', 'export', '选择输出位置失败: $error');
+        ref.read(exportDialogLogProvider)(
+          'error',
+          'export',
+          '选择输出位置失败: $error',
+        );
       } catch (_) {}
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -643,7 +704,11 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
     } finally {
       if (mounted) setState(() => _choosingOutput = false);
       try {
-        ref.read(exportDialogLogProvider)('info', 'export', '选择输出位置结束 耗时${chooseWatch.elapsedMilliseconds}ms');
+        ref.read(exportDialogLogProvider)(
+          'info',
+          'export',
+          '选择输出位置结束 耗时${chooseWatch.elapsedMilliseconds}ms',
+        );
       } catch (_) {}
     }
   }
@@ -780,7 +845,9 @@ class _GameStatsSection extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            context.bheText('保留的进球 ÷ 全部疑似片段。疑似片段里也有不是投篮的，没碰到篮筐的投篮也不在里面，只是粗略估算。'),
+            context.bheText(
+              '保留的进球 ÷ 全部疑似片段。疑似片段里也有不是投篮的，没碰到篮筐的投篮也不在里面，只是粗略估算。',
+            ),
             style: theme.textTheme.labelSmall?.copyWith(color: c.textTertiary),
           ),
           if (playerRows.isNotEmpty) ...[
@@ -810,7 +877,10 @@ class _CountBars extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
     final theme = Theme.of(context);
-    final most = rows.fold<int>(1, (value, row) => row.count > value ? row.count : value);
+    final most = rows.fold<int>(
+      1,
+      (value, row) => row.count > value ? row.count : value,
+    );
     return Column(
       children: [
         for (final row in rows)
@@ -1106,7 +1176,9 @@ class _RunningExportCardState extends State<_RunningExportCard> {
   @override
   void initState() {
     super.initState();
-    _started = DateTime.tryParse(widget.job?['started_at']?.toString() ?? '') ?? DateTime.now();
+    _started =
+        DateTime.tryParse(widget.job?['started_at']?.toString() ?? '') ??
+        DateTime.now();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -1116,9 +1188,13 @@ class _RunningExportCardState extends State<_RunningExportCard> {
   void didUpdateWidget(_RunningExportCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.job?['id'] != widget.job?['id']) {
-      _started = DateTime.tryParse(widget.job?['started_at']?.toString() ?? '') ?? DateTime.now();
+      _started =
+          DateTime.tryParse(widget.job?['started_at']?.toString() ?? '') ??
+          DateTime.now();
     } else {
-      _started = DateTime.tryParse(widget.job?['started_at']?.toString() ?? '') ?? _started;
+      _started =
+          DateTime.tryParse(widget.job?['started_at']?.toString() ?? '') ??
+          _started;
     }
   }
 
@@ -1141,8 +1217,13 @@ class _RunningExportCardState extends State<_RunningExportCard> {
     );
     final stageKey = job?['stage']?.toString() ?? '';
     final stage = _exportStageLabel(stageKey);
-    final verifying = stageKey == 'validate_source' || stageKey == 'verify_source' || stageKey == 'cancelling';
-    final elapsed = _formatMs(DateTime.now().difference(_started).inMilliseconds.clamp(0, 1 << 40));
+    final verifying =
+        stageKey == 'validate_source' ||
+        stageKey == 'verify_source' ||
+        stageKey == 'cancelling';
+    final elapsed = _formatMs(
+      DateTime.now().difference(_started).inMilliseconds.clamp(0, 1 << 40),
+    );
     return Container(
       key: const Key('export-running'),
       padding: const EdgeInsets.all(Spacing.md),
@@ -1187,14 +1268,16 @@ class _RunningExportCardState extends State<_RunningExportCard> {
           ),
           const SizedBox(height: Spacing.sm),
           CsProgressTrack(value: progress, indeterminate: verifying),
-          if (verifying) Text(context.bheText('已用 $elapsed'), key: const Key('export-elapsed')),
+          if (verifying)
+            Text(
+              context.bheText('已用 $elapsed'),
+              key: const Key('export-elapsed'),
+            ),
           const SizedBox(height: Spacing.sm),
           Text(
             l10n?.text('本次输出使用启动导出时的片段列表，之后的审核修改用于下一次导出。') ??
                 '本次输出使用启动导出时的片段列表，之后的审核修改用于下一次导出。',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: c.textSecondary,
-            ),
+            style: theme.textTheme.labelSmall?.copyWith(color: c.textSecondary),
           ),
         ],
       ),
@@ -1220,9 +1303,13 @@ class _ExportHistoryCard extends StatelessWidget {
     final count = (item['candidate_count'] as num?)?.toInt() ?? 0;
     final duration = (item['duration_ms'] as num?)?.toInt() ?? 0;
     final mergedOverlapCount =
-        ((item['metadata'] as Map?)?['merged_overlap_count'] as num?)?.toInt() ?? 0;
-    final colorWarnings = ((item['metadata'] as Map?)?['color_warnings'] as List?)
-            ?.whereType<String>().toList() ??
+        ((item['metadata'] as Map?)?['merged_overlap_count'] as num?)
+            ?.toInt() ??
+        0;
+    final colorWarnings =
+        ((item['metadata'] as Map?)?['color_warnings'] as List?)
+            ?.whereType<String>()
+            .toList() ??
         const <String>[];
     final processing = (item['processing_ms'] as num?)?.toInt() ?? 0;
     final fileSize = (item['file_size_bytes'] as num?)?.toInt() ?? 0;
@@ -1301,18 +1388,24 @@ class _ExportHistoryCard extends StatelessWidget {
                     ),
                   ),
                 if (((item['metadata'] as Map?)?['source_unverified']) == true)
-                  Text(context.bheText('原项目没有视频指纹，无法比对原视频内容。'),
-                      key: const Key('export-source-unverified'),
-                      style: theme.textTheme.labelSmall?.copyWith(color: c.warning)),
+                  Text(
+                    context.bheText('原项目没有视频指纹，无法比对原视频内容。'),
+                    key: const Key('export-source-unverified'),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: c.warning,
+                    ),
+                  ),
                 for (final warning in colorWarnings)
                   Text(
                     l10n?.localeName.startsWith('en') == true
                         ? (warning == 'HDR 色调映射不可用，画面可能偏亮'
-                            ? 'HDR tone mapping is unavailable; the video may look too bright.'
-                            : 'Video color information is incomplete; HDR tone mapping was not applied.')
+                              ? 'HDR tone mapping is unavailable; the video may look too bright.'
+                              : 'Video color information is incomplete; HDR tone mapping was not applied.')
                         : warning,
                     key: const Key('export-color-warning'),
-                    style: theme.textTheme.labelSmall?.copyWith(color: c.warning),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: c.warning,
+                    ),
                   ),
                 const SizedBox(height: 2),
                 SelectableText(
@@ -1391,7 +1484,8 @@ Future<void> _openDirectory(
   final l10n = Localizations.of<BheLocalizations>(context, BheLocalizations);
   try {
     if (Platform.isMacOS) {
-      final String? target = targetPath == null || !File(targetPath).existsSync()
+      final String? target =
+          targetPath == null || !File(targetPath).existsSync()
           ? null
           : targetPath;
       await Process.start(
@@ -1454,11 +1548,7 @@ class _EffectChoice {
 }
 
 List<_EffectChoice> _effectOptions(BuildContext context) => [
-  _EffectChoice(
-    'none',
-    context.bheText('不加效果'),
-    context.bheText('每个片段原样导出。'),
-  ),
+  _EffectChoice('none', context.bheText('不加效果'), context.bheText('每个片段原样导出。')),
   _EffectChoice(
     'approach',
     context.bheText('临门慢动作'),
@@ -1467,7 +1557,9 @@ List<_EffectChoice> _effectOptions(BuildContext context) => [
   _EffectChoice(
     'replay',
     context.bheText('慢放特写回放'),
-    context.bheText('片段播完后，重播入框前后约 0.8 秒的画面：放慢一倍，取景框住篮筐和球的飞行路线，方便看清球进没进。每个进球多约 1.6 秒。'),
+    context.bheText(
+      '片段播完后，重播入框前后约 0.8 秒的画面：放慢一倍，取景框住篮筐和球的飞行路线，方便看清球进没进。每个进球多约 1.6 秒。',
+    ),
   ),
 ];
 
@@ -1475,7 +1567,9 @@ List<_EffectChoice> _effectOptions(BuildContext context) => [
 int _effectDuration(int total, Map<String, dynamic> item, String effect) {
   if (effect == 'none') return _clipDuration(total, item);
   final base = _clipDuration(total, item);
-  if (item['detector_version']?.toString().startsWith('manual') == true) return base;
+  if (item['detector_version']?.toString().startsWith('manual') == true) {
+    return base;
+  }
   final event = (item['event_time_ms'] as num?)?.toInt();
   if (event == null) return base;
   final start =
@@ -1527,7 +1621,9 @@ class _EffectOption extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Icon(
-                selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
                 size: 18,
                 color: selected ? c.orange : c.textTertiary,
               ),

@@ -517,6 +517,8 @@ class EngineSession {
     List<String>? playerIds,
     bool? includeUnassigned,
     String effect = 'none',
+    Map<String, dynamic>? presentation,
+    List<Map<String, dynamic>> sourceProjects = const [],
   }) {
     return client.request('start_export', <String, dynamic>{
       'project_root': projectRoot,
@@ -527,6 +529,8 @@ class EngineSession {
       ...?_optionalEntry('player_ids', playerIds),
       ...?_optionalEntry('include_unassigned', includeUnassigned),
       if (effect != 'none') 'effect': effect,
+      ...?_optionalEntry('presentation', presentation),
+      if (sourceProjects.isNotEmpty) 'source_projects': sourceProjects,
     });
   }
 

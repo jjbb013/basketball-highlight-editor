@@ -38,10 +38,7 @@ void main() {
 
   test('文件找不到、没有权限、磁盘满时给出明确说明', () {
     final missing = userFacingNotice(
-      const EngineException(
-        'FILE_NOT_FOUND',
-        r'D:\Videos\BasketballProjects',
-      ),
+      const EngineException('FILE_NOT_FOUND', r'D:\Videos\BasketballProjects'),
     );
     expect(missing.title, r'找不到文件或文件夹：D:\Videos\BasketballProjects');
     expect(missing.description, contains('重新定位视频'));
@@ -52,11 +49,18 @@ void main() {
     expect(wrapped.title, '找不到文件或文件夹：/movies/game.mp4');
 
     expect(
-      userFacingNotice(const EngineException('FILE_ACCESS_DENIED', '/data/project.db')).title,
+      userFacingNotice(
+        const EngineException('FILE_ACCESS_DENIED', '/data/project.db'),
+      ).title,
       '没有权限访问：/data/project.db',
     );
     expect(
-      userFacingNotice(const EngineException('DISK_FULL', '[Errno 28] No space left on device')),
+      userFacingNotice(
+        const EngineException(
+          'DISK_FULL',
+          '[Errno 28] No space left on device',
+        ),
+      ),
       (title: '磁盘空间不足', description: '请清理磁盘空间后再试。'),
     );
   });
@@ -114,10 +118,12 @@ void main() {
     test('忙碌拒绝重定位不使新项目导入失效，写入归属新项目', () async {
       final transport = _RaceTransport();
       final session = _RaceSession(transport);
-      final container = ProviderContainer(overrides: [
-        projectSessionProvider.overrideWithValue(session),
-        engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          projectSessionProvider.overrideWithValue(session),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+        ],
+      );
       addTearDown(container.dispose);
       final notifier = container.read(projectProvider.notifier);
       await notifier.selectVideo('/path/a.mp4');
@@ -139,15 +145,27 @@ void main() {
     test('打开失败迟到不恢复并覆盖新会话', () async {
       final transport = _RaceTransport()..openGate = Completer<void>();
       final session = _RaceSession(transport);
-      session.restore(const ProjectSessionCheckpoint(projectRoot: '/old', projectId: 'old'));
-      final container = ProviderContainer(overrides: [
-        projectSessionProvider.overrideWithValue(session),
-        engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
-      ]);
+      session.restore(
+        const ProjectSessionCheckpoint(projectRoot: '/old', projectId: 'old'),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          projectSessionProvider.overrideWithValue(session),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+        ],
+      );
       addTearDown(container.dispose);
-      final pending = container.read(projectProvider.notifier).openProject('/failing');
+      final pending = container
+          .read(projectProvider.notifier)
+          .openProject('/failing');
       await transport.openStarted.future;
-      session.restore(const ProjectSessionCheckpoint(projectRoot: '/new', projectId: 'new', videoId: 'new-video'));
+      session.restore(
+        const ProjectSessionCheckpoint(
+          projectRoot: '/new',
+          projectId: 'new',
+          videoId: 'new-video',
+        ),
+      );
       transport.openGate!.completeError(StateError('open failed'));
       await pending;
       expect(session.projectRoot, '/new');
@@ -159,31 +177,43 @@ void main() {
       SharedPreferencesStorePlatform.instance = _FailingPreferences();
       addTearDown(() => SharedPreferencesStorePlatform.instance = oldStore);
       final fake = _FakeProjectSession()
-        ..createProjectErrors.add(const EngineException('FILE_ACCESS_DENIED', 'denied'))
+        ..createProjectErrors.add(
+          const EngineException('FILE_ACCESS_DENIED', 'denied'),
+        )
         ..linkError = const EngineException('VIDEO_INVALID', 'invalid');
       final container = containerFor(fake);
-      await container.read(projectProvider.notifier).selectVideo('/path/sample.mp4');
+      await container
+          .read(projectProvider.notifier)
+          .selectVideo('/path/sample.mp4');
       final path = fake.createdProjectRoots.last;
       final notices = container.read(noticeProvider);
-      final pathNotices = notices.where((n) => n.actionLabel == '复制项目路径').toList();
+      final pathNotices = notices
+          .where((n) => n.actionLabel == '复制项目路径')
+          .toList();
       expect(pathNotices, hasLength(2));
       for (final notice in pathNotices) {
         expect(notice.description, contains(path));
         expect(notice.description, contains('打开项目'));
         expect(notice.action, isNotNull);
         expect(notice.description, isNot(contains('最近项目')));
-        final english = lookupBheLocalizations(const Locale('en')).text(notice.description!);
+        final english = lookupBheLocalizations(
+          const Locale('en'),
+        ).text(notice.description!);
         expect(english, contains(path));
         expect(english, contains('Open project'));
       }
       String? copied;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-        if (call.method == 'Clipboard.setData') copied = call.arguments['text'] as String;
-        return null;
-      });
-      addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemChannels.platform, null));
+            if (call.method == 'Clipboard.setData') {
+              copied = call.arguments['text'] as String;
+            }
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null),
+      );
       pathNotices.last.action!();
       await Future<void>.delayed(Duration.zero);
       expect(copied, path);
@@ -216,9 +246,13 @@ void main() {
     test('关联超时保留项目并提示结果未确认', () async {
       final gate = Completer<void>();
       final fake = _FakeProjectSession()..linkGate = gate;
-      fake.restore(const ProjectSessionCheckpoint(projectRoot: '/old', projectId: 'old'));
+      fake.restore(
+        const ProjectSessionCheckpoint(projectRoot: '/old', projectId: 'old'),
+      );
       final container = containerFor(fake);
-      final pending = container.read(projectProvider.notifier).selectVideo('/path/sample.mp4');
+      final pending = container
+          .read(projectProvider.notifier)
+          .selectVideo('/path/sample.mp4');
       while (fake.linkCalls == 0) {
         await Future<void>.delayed(Duration.zero);
       }
@@ -229,7 +263,10 @@ void main() {
       expect(fake.projectRoot, '/old');
       expect(fake.loadRecentProjectsCalls, greaterThan(0));
       final notices = container.read(noticeProvider);
-      expect(notices.map((n) => n.title), contains('导入未确认，项目已保留；稍后打开检查，请勿重复导入'));
+      expect(
+        notices.map((n) => n.title),
+        contains('导入未确认，项目已保留；稍后打开检查，请勿重复导入'),
+      );
       expect(notices.any((n) => n.title.contains('视频已加载')), isFalse);
     });
 
@@ -284,16 +321,27 @@ void main() {
     test('默认项目目录建不了项目时改存到应用数据目录', () async {
       final fakeSession = _FakeProjectSession()
         ..createProjectErrors.add(
-          const EngineException('FILE_NOT_FOUND', r'D:\Videos\BasketballProjects'),
+          const EngineException(
+            'FILE_NOT_FOUND',
+            r'D:\Videos\BasketballProjects',
+          ),
         );
       final container = containerFor(fakeSession);
 
-      await container.read(projectProvider.notifier).selectVideo('/path/sample.mp4');
+      await container
+          .read(projectProvider.notifier)
+          .selectVideo('/path/sample.mp4');
 
       final fallback = fallbackProjectsRoot(Platform.environment);
       expect(fakeSession.createdProjectRoots, hasLength(2));
-      expect(fakeSession.createdProjectRoots.first, isNot(startsWith(fallback)));
-      expect(fakeSession.createdProjectRoots.last, startsWith('$fallback/sample-'));
+      expect(
+        fakeSession.createdProjectRoots.first,
+        isNot(startsWith(fallback)),
+      );
+      expect(
+        fakeSession.createdProjectRoots.last,
+        startsWith('$fallback/sample-'),
+      );
       expect(
         fakeSession.createdProjectRoots.first.split('/').last,
         fakeSession.createdProjectRoots.last.split('/').last,
@@ -309,10 +357,14 @@ void main() {
 
     test('其它建项目错误不换目录，照常报错', () async {
       final fakeSession = _FakeProjectSession()
-        ..createProjectErrors.add(const EngineException('DISK_FULL', 'No space left'));
+        ..createProjectErrors.add(
+          const EngineException('DISK_FULL', 'No space left'),
+        );
       final container = containerFor(fakeSession);
 
-      await container.read(projectProvider.notifier).selectVideo('/path/sample.mp4');
+      await container
+          .read(projectProvider.notifier)
+          .selectVideo('/path/sample.mp4');
 
       expect(fakeSession.createdProjectRoots, hasLength(1));
       expect(container.read(projectProvider).video, isNull);
@@ -866,14 +918,28 @@ void main() {
   });
 
   test('export start timeout warns result is unconfirmed', () async {
-    final session = _FakeProjectSession()..exportError = const EngineException('ENGINE_TIMEOUT', 'start_export');
-    session.restore(const ProjectSessionCheckpoint(projectRoot: '/project', projectId: 'p', videoId: 'v'));
+    final session = _FakeProjectSession()
+      ..exportError = const EngineException('ENGINE_TIMEOUT', 'start_export');
+    session.restore(
+      const ProjectSessionCheckpoint(
+        projectRoot: '/project',
+        projectId: 'p',
+        videoId: 'v',
+      ),
+    );
     final transport = _UnconfirmedExportTransport();
-    session.testScope = ProjectSessionScope(engine: EngineSession(transport), projectRoot: '/project', projectId: 'p', videoId: 'v');
-    final container = ProviderContainer(overrides: [
-      projectSessionProvider.overrideWithValue(session),
-      engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
-    ]);
+    session.testScope = ProjectSessionScope(
+      engine: EngineSession(transport),
+      projectRoot: '/project',
+      projectId: 'p',
+      videoId: 'v',
+    );
+    final container = ProviderContainer(
+      overrides: [
+        projectSessionProvider.overrideWithValue(session),
+        engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+      ],
+    );
     addTearDown(container.dispose);
     await container.read(projectProvider.notifier).export('merge');
     expect(container.read(noticeProvider).last.title, '上一次导出启动结果未确认，请先查看导出任务');
@@ -883,114 +949,211 @@ void main() {
     expect(session.exportCalls, 1);
     await container.read(projectProvider.notifier).checkUnconfirmedExport();
     expect(container.read(projectProvider).exportStartUnconfirmed, isTrue);
-    transport.latest = {'id':'old-job', 'state':'completed', 'created_at':DateTime.now().toUtc().subtract(const Duration(seconds: 1)).toIso8601String()};
+    transport.latest = {
+      'id': 'old-job',
+      'state': 'completed',
+      'created_at': DateTime.now()
+          .toUtc()
+          .subtract(const Duration(seconds: 1))
+          .toIso8601String(),
+    };
     await container.read(projectProvider.notifier).checkUnconfirmedExport();
     expect(container.read(projectProvider).exportStartUnconfirmed, isTrue);
-    transport.latest = {'id':'new-job', 'state':'completed', 'created_at':DateTime.now().toUtc().toIso8601String()};
+    transport.latest = {
+      'id': 'new-job',
+      'state': 'completed',
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    };
     await container.read(projectProvider.notifier).checkUnconfirmedExport();
     expect(container.read(projectProvider).exportStartUnconfirmed, isFalse);
     expect(container.read(projectProvider).exportJob?['id'], 'new-job');
   });
 
-  test('unknown export remains scoped to project after reopening and notifier recreation', () async {
-    final session = _FakeProjectSession()..exportError = const EngineException('ENGINE_TIMEOUT', 'start_export');
-    session.restore(const ProjectSessionCheckpoint(projectRoot: '/project', projectId: 'p', videoId: 'v'));
-    ProviderContainer makeContainer() => ProviderContainer(overrides: [
-      projectSessionProvider.overrideWithValue(session),
-      engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
-    ]);
-    final first = makeContainer();
-    await first.read(projectProvider.notifier).export('merge');
-    expect(first.read(projectProvider).exportStartUnconfirmed, isTrue);
-    first.read(projectProvider.notifier).closeProject();
-    session.restore(const ProjectSessionCheckpoint(projectRoot: '/other', projectId: 'other'));
-    await first.read(projectProvider.notifier).openProject('/other');
-    expect(first.read(projectProvider).exportStartUnconfirmed, isFalse);
-    session.restore(const ProjectSessionCheckpoint(projectRoot: '/project', projectId: 'p', videoId: 'v'));
-    await first.read(projectProvider.notifier).openProject('/project');
-    expect(first.read(projectProvider).exportStartUnconfirmed, isTrue);
-    first.dispose();
-    final second = makeContainer();
-    addTearDown(second.dispose);
-    await second.read(projectProvider.notifier).openProject('/project');
-    expect(second.read(projectProvider).exportStartUnconfirmed, isTrue);
-    second.read(projectProvider.notifier).confirmUncertainExportChecked();
-    expect(second.read(projectProvider).exportStartUnconfirmed, isFalse);
-  });
+  test(
+    'unknown export remains scoped to project after reopening and notifier recreation',
+    () async {
+      final session = _FakeProjectSession()
+        ..exportError = const EngineException('ENGINE_TIMEOUT', 'start_export');
+      session.restore(
+        const ProjectSessionCheckpoint(
+          projectRoot: '/project',
+          projectId: 'p',
+          videoId: 'v',
+        ),
+      );
+      ProviderContainer makeContainer() => ProviderContainer(
+        overrides: [
+          projectSessionProvider.overrideWithValue(session),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+        ],
+      );
+      final first = makeContainer();
+      await first.read(projectProvider.notifier).export('merge');
+      expect(first.read(projectProvider).exportStartUnconfirmed, isTrue);
+      first.read(projectProvider.notifier).closeProject();
+      session.restore(
+        const ProjectSessionCheckpoint(
+          projectRoot: '/other',
+          projectId: 'other',
+        ),
+      );
+      await first.read(projectProvider.notifier).openProject('/other');
+      expect(first.read(projectProvider).exportStartUnconfirmed, isFalse);
+      session.restore(
+        const ProjectSessionCheckpoint(
+          projectRoot: '/project',
+          projectId: 'p',
+          videoId: 'v',
+        ),
+      );
+      await first.read(projectProvider.notifier).openProject('/project');
+      expect(first.read(projectProvider).exportStartUnconfirmed, isTrue);
+      first.dispose();
+      final second = makeContainer();
+      addTearDown(second.dispose);
+      await second.read(projectProvider.notifier).openProject('/project');
+      expect(second.read(projectProvider).exportStartUnconfirmed, isTrue);
+      second.read(projectProvider.notifier).confirmUncertainExportChecked();
+      expect(second.read(projectProvider).exportStartUnconfirmed, isFalse);
+    },
+  );
 
   for (final damaged in ['json', 'record', 'missing_previous']) {
-    test('damaged export guard $damaged does not block opening and is retried', () async {
+    test(
+      'damaged export guard $damaged does not block opening and is retried',
+      () async {
+        const prefKey = 'bhe.desktop.uncertain_export_starts';
+        final projectKey = '/project${String.fromCharCode(0)}p';
+        final otherKey = '/other${String.fromCharCode(0)}other';
+        final valid = {
+          'startedAt': DateTime.now().toUtc().toIso8601String(),
+          'previousId': null,
+        };
+        final badRecord = damaged == 'missing_previous'
+            ? {'startedAt': valid['startedAt']}
+            : {'previousId': 'x'};
+        final initial = damaged == 'json'
+            ? '{broken'
+            : jsonEncode({'bad': badRecord, otherKey: valid});
+        SharedPreferences.setMockInitialValues({prefKey: initial});
+        final session = _FakeProjectSession();
+        session.restore(
+          const ProjectSessionCheckpoint(
+            projectRoot: '/project',
+            projectId: 'p',
+          ),
+        );
+        final container = ProviderContainer(
+          overrides: [
+            projectSessionProvider.overrideWithValue(session),
+            engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+          ],
+        );
+        addTearDown(container.dispose);
+        final notifier = container.read(projectProvider.notifier);
+        expect(await notifier.openProject('/project'), isTrue);
+        expect(container.read(projectProvider).exportStartUnconfirmed, isFalse);
+        expect(await notifier.openProject('/project'), isTrue);
+        expect(
+          container
+              .read(noticeProvider)
+              .where((n) => n.title == '导出任务保护状态读取失败，已忽略'),
+          hasLength(1),
+        );
+        if (damaged != 'json') {
+          session.restore(
+            const ProjectSessionCheckpoint(
+              projectRoot: '/other',
+              projectId: 'other',
+            ),
+          );
+          expect(await notifier.openProject('/other'), isTrue);
+          expect(
+            container.read(projectProvider).exportStartUnconfirmed,
+            isTrue,
+          );
+        }
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(prefKey, jsonEncode({projectKey: valid}));
+        session.restore(
+          const ProjectSessionCheckpoint(
+            projectRoot: '/project',
+            projectId: 'p',
+          ),
+        );
+        expect(await notifier.openProject('/project'), isTrue);
+        expect(container.read(projectProvider).exportStartUnconfirmed, isTrue);
+      },
+    );
+  }
+
+  test(
+    'temporary preferences initialization failure does not block opening and retries',
+    () async {
       const prefKey = 'bhe.desktop.uncertain_export_starts';
-      final projectKey = '/project${String.fromCharCode(0)}p';
-      final otherKey = '/other${String.fromCharCode(0)}other';
-      final valid = {'startedAt': DateTime.now().toUtc().toIso8601String(), 'previousId': null};
-      final badRecord = damaged == 'missing_previous' ? {'startedAt': valid['startedAt']} : {'previousId': 'x'};
-      final initial = damaged == 'json' ? '{broken' : jsonEncode({'bad': badRecord, otherKey: valid});
-      SharedPreferences.setMockInitialValues({prefKey: initial});
+      final key = '/project${String.fromCharCode(0)}p';
+      final value = jsonEncode({
+        key: {
+          'startedAt': DateTime.now().toUtc().toIso8601String(),
+          'previousId': null,
+        },
+      });
+      SharedPreferences.setMockInitialValues({});
+      final backend = _IntermittentPreferences({'flutter.$prefKey': value});
+      SharedPreferencesStorePlatform.instance = backend;
       final session = _FakeProjectSession();
-      session.restore(const ProjectSessionCheckpoint(projectRoot: '/project', projectId: 'p'));
-      final container = ProviderContainer(overrides: [
-        projectSessionProvider.overrideWithValue(session),
-        engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
-      ]);
+      session.restore(
+        const ProjectSessionCheckpoint(projectRoot: '/project', projectId: 'p'),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          projectSessionProvider.overrideWithValue(session),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+        ],
+      );
       addTearDown(container.dispose);
       final notifier = container.read(projectProvider.notifier);
       expect(await notifier.openProject('/project'), isTrue);
       expect(container.read(projectProvider).exportStartUnconfirmed, isFalse);
-      expect(await notifier.openProject('/project'), isTrue);
-      expect(container.read(noticeProvider).where((n) => n.title == '导出任务保护状态读取失败，已忽略'), hasLength(1));
-      if (damaged != 'json') {
-        session.restore(const ProjectSessionCheckpoint(projectRoot: '/other', projectId: 'other'));
-        expect(await notifier.openProject('/other'), isTrue);
-        expect(container.read(projectProvider).exportStartUnconfirmed, isTrue);
-      }
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(prefKey, jsonEncode({projectKey: valid}));
-      session.restore(const ProjectSessionCheckpoint(projectRoot: '/project', projectId: 'p'));
+      expect(
+        container
+            .read(noticeProvider)
+            .where((n) => n.title == '导出任务保护状态读取失败，已忽略'),
+        hasLength(1),
+      );
+      backend.fail = false;
       expect(await notifier.openProject('/project'), isTrue);
       expect(container.read(projectProvider).exportStartUnconfirmed, isTrue);
-    });
-  }
+      expect(backend.attempts, greaterThanOrEqualTo(2));
+    },
+  );
 
-  test('temporary preferences initialization failure does not block opening and retries', () async {
-    const prefKey = 'bhe.desktop.uncertain_export_starts';
-    final key = '/project${String.fromCharCode(0)}p';
-    final value = jsonEncode({key: {'startedAt': DateTime.now().toUtc().toIso8601String(), 'previousId': null}});
-    SharedPreferences.setMockInitialValues({});
-    final backend = _IntermittentPreferences({'flutter.$prefKey': value});
-    SharedPreferencesStorePlatform.instance = backend;
-    final session = _FakeProjectSession();
-    session.restore(const ProjectSessionCheckpoint(projectRoot: '/project', projectId: 'p'));
-    final container = ProviderContainer(overrides: [
-      projectSessionProvider.overrideWithValue(session),
-      engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
-    ]);
-    addTearDown(container.dispose);
-    final notifier = container.read(projectProvider.notifier);
-    expect(await notifier.openProject('/project'), isTrue);
-    expect(container.read(projectProvider).exportStartUnconfirmed, isFalse);
-    expect(container.read(noticeProvider).where((n) => n.title == '导出任务保护状态读取失败，已忽略'), hasLength(1));
-    backend.fail = false;
-    expect(await notifier.openProject('/project'), isTrue);
-    expect(container.read(projectProvider).exportStartUnconfirmed, isTrue);
-    expect(backend.attempts, greaterThanOrEqualTo(2));
-  });
-
-  test('export does not start when its uncertainty guard cannot be saved', () async {
-    final oldStore = SharedPreferencesStorePlatform.instance;
-    SharedPreferencesStorePlatform.instance = _FailingPreferences();
-    addTearDown(() => SharedPreferencesStorePlatform.instance = oldStore);
-    final session = _FakeProjectSession();
-    session.restore(const ProjectSessionCheckpoint(projectRoot: '/project', projectId: 'p', videoId: 'v'));
-    final container = ProviderContainer(overrides: [
-      projectSessionProvider.overrideWithValue(session),
-      engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
-    ]);
-    addTearDown(container.dispose);
-    await container.read(projectProvider.notifier).export('merge');
-    expect(session.exportCalls, 0);
-    expect(container.read(noticeProvider).last.title, '无法保存导出任务状态，未开始导出。');
-  });
+  test(
+    'export does not start when its uncertainty guard cannot be saved',
+    () async {
+      final oldStore = SharedPreferencesStorePlatform.instance;
+      SharedPreferencesStorePlatform.instance = _FailingPreferences();
+      addTearDown(() => SharedPreferencesStorePlatform.instance = oldStore);
+      final session = _FakeProjectSession();
+      session.restore(
+        const ProjectSessionCheckpoint(
+          projectRoot: '/project',
+          projectId: 'p',
+          videoId: 'v',
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          projectSessionProvider.overrideWithValue(session),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(projectProvider.notifier).export('merge');
+      expect(session.exportCalls, 0);
+      expect(container.read(noticeProvider).last.title, '无法保存导出任务状态，未开始导出。');
+    },
+  );
 
   group('ProjectNotifier.saveRoi', () {
     test('Engine 拒绝保存 ROI 时返回 false', () async {
@@ -1302,10 +1465,7 @@ void main() {
     );
 
     expect(result?['skipped_invalid'], 1);
-    expect(
-      container.read(noticeProvider).last.title,
-      '已更新片段时长，1 个片段靠近视频结尾未调整',
-    );
+    expect(container.read(noticeProvider).last.title, '已更新片段时长，1 个片段靠近视频结尾未调整');
     expect(container.read(projectProvider).busy, isFalse);
   });
 
@@ -1734,10 +1894,14 @@ class _FakeProjectSession extends ProjectSession {
     List<String>? playerIds,
     bool? includeUnassigned,
     String effect = 'none',
+    Map<String, dynamic>? presentation,
+    List<Map<String, dynamic>> sourceProjects = const [],
   }) async {
     exportCalls++;
     if (exportError != null) throw exportError!;
-    return <String, dynamic>{'job': <String, dynamic>{'id': 'export-1', 'state': 'running'}};
+    return <String, dynamic>{
+      'job': <String, dynamic>{'id': 'export-1', 'state': 'running'},
+    };
   }
 
   @override
@@ -1806,7 +1970,8 @@ class _RecoveringTransport implements EngineTransport {
 class _FailingPreferences extends InMemorySharedPreferencesStore {
   _FailingPreferences() : super.empty();
   @override
-  Future<bool> setValue(String valueType, String key, Object value) async => false;
+  Future<bool> setValue(String valueType, String key, Object value) async =>
+      false;
 }
 
 class _RaceTransport implements EngineTransport {
@@ -1822,17 +1987,28 @@ class _RaceTransport implements EngineTransport {
         if (!createStarted.isCompleted) createStarted.complete();
         await createGate!.future;
       }
-      return {'project': {'id': payload['name'], 'root_path': payload['root_path']}};
+      return {
+        'project': {'id': payload['name'], 'root_path': payload['root_path']},
+      };
     }
     if (command == 'link_video') {
-      return {'video': {'id': payload['video_path'].toString().split('/').last,
-        'source_path': payload['video_path'], 'duration_ms': 5000, 'width': 1920, 'height': 1080}};
+      return {
+        'video': {
+          'id': payload['video_path'].toString().split('/').last,
+          'source_path': payload['video_path'],
+          'duration_ms': 5000,
+          'width': 1920,
+          'height': 1080,
+        },
+      };
     }
     if (command == 'open_project') {
       openStarted.complete();
       await openGate!.future;
     }
-    if (command == 'update_project_settings') lastWriteRoot = payload['project_root'] as String;
+    if (command == 'update_project_settings') {
+      lastWriteRoot = payload['project_root'] as String;
+    }
     return {};
   }
 }
@@ -1840,12 +2016,23 @@ class _RaceTransport implements EngineTransport {
 class _RaceSession extends ProjectSession {
   _RaceSession(_RaceTransport transport) : super(EngineSession(transport));
   @override
-  Future<JsonMap> extractPreview({int timeMs = 1000, String? videoId}) async => {'path': '/tmp/preview.jpg'};
+  Future<JsonMap> extractPreview({int timeMs = 1000, String? videoId}) async =>
+      {'path': '/tmp/preview.jpg'};
   @override
-  Future<JsonMap> suggestRoi({String? videoId, String? modelPath, int? startMs,
-      double? sampleFps, double? duration, double? confidence, int? maxSamples}) async => {};
+  Future<JsonMap> suggestRoi({
+    String? videoId,
+    String? modelPath,
+    int? startMs,
+    double? sampleFps,
+    double? duration,
+    double? confidence,
+    int? maxSamples,
+  }) async => {};
   @override
-  Future<List<JsonMap>> loadRecentProjects({required String knownRoot, int limit = 20}) async => [];
+  Future<List<JsonMap>> loadRecentProjects({
+    required String knownRoot,
+    int limit = 20,
+  }) async => [];
 }
 
 class _UnconfirmedExportTransport implements EngineTransport {

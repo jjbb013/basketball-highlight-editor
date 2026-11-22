@@ -70,44 +70,87 @@ void main() {
       tester.view.physicalSize = const Size(760, 1000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(ProviderScope(
-        overrides: [projectProvider.overrideWith(() => _ExportNotifier(ProjectState(
-          exportHistory: [{'mode':'merge', 'output_path':'/tmp/out.mp4', 'metadata':{'source_unverified':true}}],
-        )))],
-        child: MaterialApp(locale: Locale(locale),
-          localizationsDelegates: BheLocalizations.localizationsDelegates,
-          supportedLocales: BheLocalizations.supportedLocales,
-          home: const Scaffold(body: ExportScreen())),
-      ));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            projectProvider.overrideWith(
+              () => _ExportNotifier(
+                ProjectState(
+                  exportHistory: [
+                    {
+                      'mode': 'merge',
+                      'output_path': '/tmp/out.mp4',
+                      'metadata': {'source_unverified': true},
+                    },
+                  ],
+                ),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            locale: Locale(locale),
+            localizationsDelegates: BheLocalizations.localizationsDelegates,
+            supportedLocales: BheLocalizations.supportedLocales,
+            home: const Scaffold(body: ExportScreen()),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('export-source-unverified')), findsOneWidget);
-      expect(find.text(locale == 'en' ? 'This project has no video fingerprint; the source content cannot be compared.' : '原项目没有视频指纹，无法比对原视频内容。'), findsOneWidget);
+      expect(
+        find.text(
+          locale == 'en'
+              ? 'This project has no video fingerprint; the source content cannot be compared.'
+              : '原项目没有视频指纹，无法比对原视频内容。',
+        ),
+        findsOneWidget,
+      );
     });
   }
 
   for (final locale in ['zh', 'en']) {
     for (final stage in ['validate_source', 'verify_source']) {
-      testWidgets('export $stage shows elapsed and indeterminate $locale', (tester) async {
+      testWidgets('export $stage shows elapsed and indeterminate $locale', (
+        tester,
+      ) async {
         tester.view.physicalSize = const Size(900, 1000);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
-        final notifier = _CancelExportNotifier(ProjectState(
-          exportJob: {'id':'job-1', 'state':'running', 'stage':stage, 'progress':.4},
-        ));
-        await tester.pumpWidget(ProviderScope(
-          overrides: [projectProvider.overrideWith(() => notifier)],
-          child: MaterialApp(locale: Locale(locale),
-            localizationsDelegates: BheLocalizations.localizationsDelegates,
-            supportedLocales: BheLocalizations.supportedLocales,
-            home: const Scaffold(body: ExportScreen())),
-        ));
+        final notifier = _CancelExportNotifier(
+          ProjectState(
+            exportJob: {
+              'id': 'job-1',
+              'state': 'running',
+              'stage': stage,
+              'progress': .4,
+            },
+          ),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [projectProvider.overrideWith(() => notifier)],
+            child: MaterialApp(
+              locale: Locale(locale),
+              localizationsDelegates: BheLocalizations.localizationsDelegates,
+              supportedLocales: BheLocalizations.supportedLocales,
+              home: const Scaffold(body: ExportScreen()),
+            ),
+          ),
+        );
         await tester.pump();
         final stageLabel = stage == 'validate_source'
             ? (locale == 'en' ? 'Checking source video' : '校验原视频')
             : (locale == 'en' ? 'Rechecking source video' : '复核原视频');
         expect(find.textContaining(stageLabel), findsOneWidget);
         expect(find.byKey(const Key('export-elapsed')), findsOneWidget);
-        expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, isNull);
+        expect(
+          tester
+              .widget<LinearProgressIndicator>(
+                find.byType(LinearProgressIndicator),
+              )
+              .value,
+          isNull,
+        );
         expect(find.textContaining('40%'), findsNothing);
         final cancel = find.text(locale == 'en' ? 'Cancel export' : '取消导出');
         await tester.ensureVisible(cancel);
@@ -119,21 +162,32 @@ void main() {
     }
   }
 
-  testWidgets('unknown export disables start until task check resolves', (tester) async {
+  testWidgets('unknown export disables start until task check resolves', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(900, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final notifier = _UnconfirmedExportNotifier();
-    await tester.pumpWidget(ProviderScope(
-      overrides: [projectProvider.overrideWith(() => notifier)],
-      child: const MaterialApp(home: Scaffold(body: ExportScreen())),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [projectProvider.overrideWith(() => notifier)],
+        child: const MaterialApp(home: Scaffold(body: ExportScreen())),
+      ),
+    );
     await tester.pumpAndSettle();
-    expect(tester.widget<CsButton>(find.byKey(const Key('export-start'))).onPressed, isNull);
+    expect(
+      tester.widget<CsButton>(find.byKey(const Key('export-start'))).onPressed,
+      isNull,
+    );
     expect(find.text('上一次导出启动结果未确认，请先查看导出任务'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('export-check-unknown')));
     await tester.tap(find.byKey(const Key('export-check-unknown')));
     await tester.pumpAndSettle();
-    expect(tester.widget<CsButton>(find.byKey(const Key('export-start'))).onPressed, isNotNull);
+    expect(
+      tester.widget<CsButton>(find.byKey(const Key('export-start'))).onPressed,
+      isNotNull,
+    );
   });
 
   testWidgets('the goal effect picks one option and the total follows it', (
@@ -238,7 +292,12 @@ void main() {
           {'id': 'p1', 'name': 'Alice'},
         ],
         candidates: [
-          {'id': 'a', 'event_time_ms': 60000, 'player_id': 'p1', 'review_status': 'included'},
+          {
+            'id': 'a',
+            'event_time_ms': 60000,
+            'player_id': 'p1',
+            'review_status': 'included',
+          },
           {'id': 'b', 'event_time_ms': 720000, 'review_status': 'pending'},
           {
             'id': 'c',
@@ -503,52 +562,74 @@ void main() {
     expect(videoSurfaceHidden.value, isFalse);
   });
 
-  testWidgets('picker opens while an unrelated pause remains stuck and restores the surface', (tester) async {
-    final player = _HungPausePlayer();
-    unawaited(player.pause());
-    final picker = _TestOutputPicker();
-    final notifier = _TrackingExportNotifier();
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        projectProvider.overrideWith(() => notifier),
-        playbackCoordinatorProvider.overrideWithValue(PlaybackCoordinator()),
-        exportOutputPickerProvider.overrideWithValue(picker),
-      ],
-      child: MaterialApp(home: Scaffold(body: Stack(children: [
-        const ExportScreen(),
-        IgnorePointer(child: ValueListenableBuilder<bool>(
-          valueListenable: videoSurfaceHidden,
-          builder: (_, hidden, _) => Text(hidden ? 'video placeholder' : 'video surface'),
-        )),
-      ]))),
-    ));
-    await tester.pumpAndSettle();
-    expect(find.text('video surface'), findsOneWidget);
-    final start = find.byKey(const Key('export-start'));
-    await tester.ensureVisible(start);
-    await tester.tap(start);
-    await tester.pump();
-    await tester.pump();
-    expect(picker.calls, 1);
-    expect(player.pauseCalls, 1);
-    expect(player.pauseFinished, isFalse);
-    expect(find.text('video placeholder'), findsOneWidget);
-    picker.result.complete(null);
-    await tester.pumpAndSettle();
-    expect(find.text('video surface'), findsOneWidget);
-    expect(tester.widget<CsButton>(start).onPressed, isNotNull);
-  });
+  testWidgets(
+    'picker opens while an unrelated pause remains stuck and restores the surface',
+    (tester) async {
+      final player = _HungPausePlayer();
+      unawaited(player.pause());
+      final picker = _TestOutputPicker();
+      final notifier = _TrackingExportNotifier();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            projectProvider.overrideWith(() => notifier),
+            playbackCoordinatorProvider.overrideWithValue(
+              PlaybackCoordinator(),
+            ),
+            exportOutputPickerProvider.overrideWithValue(picker),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: Stack(
+                children: [
+                  const ExportScreen(),
+                  IgnorePointer(
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: videoSurfaceHidden,
+                      builder: (_, hidden, _) =>
+                          Text(hidden ? 'video placeholder' : 'video surface'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('video surface'), findsOneWidget);
+      final start = find.byKey(const Key('export-start'));
+      await tester.ensureVisible(start);
+      await tester.tap(start);
+      await tester.pump();
+      await tester.pump();
+      expect(picker.calls, 1);
+      expect(player.pauseCalls, 1);
+      expect(player.pauseFinished, isFalse);
+      expect(find.text('video placeholder'), findsOneWidget);
+      picker.result.complete(null);
+      await tester.pumpAndSettle();
+      expect(find.text('video surface'), findsOneWidget);
+      expect(tester.widget<CsButton>(start).onPressed, isNotNull);
+    },
+  );
 
-  testWidgets('diagnostic failures cannot block or strand picker', (tester) async {
+  testWidgets('diagnostic failures cannot block or strand picker', (
+    tester,
+  ) async {
     final picker = _TestOutputPicker();
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        projectProvider.overrideWith(_TrackingExportNotifier.new),
-        exportOutputPickerProvider.overrideWithValue(picker),
-        exportDialogLogProvider.overrideWithValue((_, _, _) => throw StateError('log failed')),
-      ],
-      child: const MaterialApp(home: Scaffold(body: ExportScreen())),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          projectProvider.overrideWith(_TrackingExportNotifier.new),
+          exportOutputPickerProvider.overrideWithValue(picker),
+          exportDialogLogProvider.overrideWithValue(
+            (_, _, _) => throw StateError('log failed'),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: ExportScreen())),
+      ),
+    );
     await tester.pumpAndSettle();
     final start = find.byKey(const Key('export-start'));
     await tester.ensureVisible(start);
@@ -563,13 +644,17 @@ void main() {
   });
 
   testWidgets('provider failure resets the export button', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        projectProvider.overrideWith(_TrackingExportNotifier.new),
-        playbackCoordinatorProvider.overrideWith((ref) => throw StateError('provider failed')),
-      ],
-      child: const MaterialApp(home: Scaffold(body: ExportScreen())),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          projectProvider.overrideWith(_TrackingExportNotifier.new),
+          playbackCoordinatorProvider.overrideWith(
+            (ref) => throw StateError('provider failed'),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: ExportScreen())),
+      ),
+    );
     await tester.pumpAndSettle();
     final start = find.byKey(const Key('export-start'));
     await tester.ensureVisible(start);
@@ -605,25 +690,44 @@ void main() {
       tester.view.physicalSize = const Size(1000, 1000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(ProviderScope(
-        overrides: [projectProvider.overrideWith(() => _ExportNotifier(
-          const ProjectState(exportHistory: [{
-            'mode': 'merge', 'candidate_count': 1, 'output_path': '/tmp/out.mp4',
-            'metadata': {'color_warnings': ['HDR 色调映射不可用，画面可能偏亮']},
-          }]),
-        ))],
-        child: MaterialApp(
-          locale: Locale(locale),
-          localizationsDelegates: BheLocalizations.localizationsDelegates,
-          supportedLocales: BheLocalizations.supportedLocales,
-          home: const Scaffold(body: ExportScreen()),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            projectProvider.overrideWith(
+              () => _ExportNotifier(
+                const ProjectState(
+                  exportHistory: [
+                    {
+                      'mode': 'merge',
+                      'candidate_count': 1,
+                      'output_path': '/tmp/out.mp4',
+                      'metadata': {
+                        'color_warnings': ['HDR 色调映射不可用，画面可能偏亮'],
+                      },
+                    },
+                  ],
+                ),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            locale: Locale(locale),
+            localizationsDelegates: BheLocalizations.localizationsDelegates,
+            supportedLocales: BheLocalizations.supportedLocales,
+            home: const Scaffold(body: ExportScreen()),
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('export-color-warning')), findsOneWidget);
-      expect(find.text(locale == 'en'
-          ? 'HDR tone mapping is unavailable; the video may look too bright.'
-          : 'HDR 色调映射不可用，画面可能偏亮'), findsOneWidget);
+      expect(
+        find.text(
+          locale == 'en'
+              ? 'HDR tone mapping is unavailable; the video may look too bright.'
+              : 'HDR 色调映射不可用，画面可能偏亮',
+        ),
+        findsOneWidget,
+      );
     });
   }
 
@@ -698,6 +802,25 @@ void main() {
     expect(find.byKey(const Key('export-mode-merge')), findsOneWidget);
     expect(find.byKey(const Key('export-mode-separate')), findsOneWidget);
   });
+
+  testWidgets('export passes the selected presentation configuration', (
+    tester,
+  ) async {
+    final notifier = _FilterExportNotifier(_filterState());
+    final picker = _TestOutputPicker();
+    await _pumpFilterExport(tester, notifier, picker: picker);
+    await tester.ensureVisible(find.byKey(const Key('export-cover-enabled')));
+    await tester.tap(find.byKey(const Key('export-cover-enabled')));
+    await tester.pump();
+    await _exportFiltered(tester, picker);
+    expect(notifier.exportedPresentation?['cover']['enabled'], isFalse);
+    expect(notifier.exportedPresentation?['cover']['duration_ms'], 3000);
+    expect(notifier.exportedPresentation?['audio']['volume'], 0.2);
+    expect(
+      notifier.exportedPresentation?['audio']['track'],
+      'electronic_drive',
+    );
+  });
 }
 
 class _ExportNotifier extends ProjectNotifier {
@@ -741,6 +864,8 @@ class _FilterExportNotifier extends _ExportNotifier {
   String? exportedEffect;
   String? exportedOutputDir;
   String? exportedOutputPath;
+  Map<String, dynamic>? exportedPresentation;
+  List<Map<String, dynamic>>? exportedSourceProjects;
 
   void replace(ProjectState value) => state = value;
 
@@ -752,6 +877,8 @@ class _FilterExportNotifier extends _ExportNotifier {
     List<String>? playerIds,
     bool? includeUnassigned,
     String effect = 'none',
+    Map<String, dynamic>? presentation,
+    List<Map<String, dynamic>> sourceProjects = const [],
   }) async {
     exportedMode = mode;
     exportedEffect = effect;
@@ -759,6 +886,8 @@ class _FilterExportNotifier extends _ExportNotifier {
     exportedOutputPath = outputPath;
     exportedPlayerIds = playerIds;
     exportedIncludeUnassigned = includeUnassigned;
+    exportedPresentation = presentation;
+    exportedSourceProjects = sourceProjects;
   }
 }
 
@@ -829,7 +958,10 @@ class _TestOutputPicker extends ExportOutputPicker {
   var calls = 0;
   Object? failure;
   @override
-  Future<String?> mergedPath({required String typeLabel, String projectName = 'Project'}) {
+  Future<String?> mergedPath({
+    required String typeLabel,
+    String projectName = 'Project',
+  }) {
     calls++;
     if (failure != null) throw failure!;
     return result.future;
@@ -872,6 +1004,8 @@ class _TrackingExportNotifier extends _ExportNotifier {
     List<String>? playerIds,
     bool? includeUnassigned,
     String effect = 'none',
+    Map<String, dynamic>? presentation,
+    List<Map<String, dynamic>> sourceProjects = const [],
   }) async {
     exports.add('$mode:${outputPath ?? outputDir}');
   }
@@ -881,17 +1015,24 @@ class _CancelExportNotifier extends _ExportNotifier {
   _CancelExportNotifier(super.initialState);
   bool cancelled = false;
   @override
-  Future<void> cancelExport() async { cancelled = true; }
+  Future<void> cancelExport() async {
+    cancelled = true;
+  }
 }
 
 class _UnconfirmedExportNotifier extends ProjectNotifier {
   @override
   ProjectState build() => const ProjectState(
     exportStartUnconfirmed: true,
-    candidates: [{'id':'c1', 'default_start_ms':0, 'default_end_ms':1000}],
+    candidates: [
+      {'id': 'c1', 'default_start_ms': 0, 'default_end_ms': 1000},
+    ],
   );
   @override
   Future<void> checkUnconfirmedExport() async {
-    state = state.copyWith(exportStartUnconfirmed: false, exportJob: {'id':'found', 'state':'completed'});
+    state = state.copyWith(
+      exportStartUnconfirmed: false,
+      exportJob: {'id': 'found', 'state': 'completed'},
+    );
   }
 }

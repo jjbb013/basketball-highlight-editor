@@ -23,36 +23,44 @@ extension BheLocalizedText on BheLocalizations {
         return '$translated${normalized.substring(newline)}';
       }
     }
-  final codedError = RegExp(r'^([A-Z][A-Z0-9_]+): (.+)$').firstMatch(normalized);
-  if (codedError != null) {
-    return '${codedError.group(1)}: ${text(codedError.group(2)!)}';
-  }
-  final errorWithDetail = RegExp(r'^(视频预览加载失败|自动切换标记画面失败|标记画面切换失败|任务状态加载失败|导出记录加载失败|关闭项目失败|退出前保存项目失败|候选片段加载失败|开始记录审核耗时失败)：(.+)$').firstMatch(normalized);
-  if (errorWithDetail != null) {
-    const labels = <String, String>{
-      '视频预览加载失败': 'Video preview failed',
-      '自动切换标记画面失败': 'Could not switch the marked frame',
-      '标记画面切换失败': 'Could not switch the marked frame',
-      '任务状态加载失败': 'Could not load task status',
-      '导出记录加载失败': 'Could not load export history',
-      '关闭项目失败': 'Could not close the project',
-      '退出前保存项目失败': 'Could not save the project before exit',
-      '候选片段加载失败': 'Could not load candidate clips',
-      '开始记录审核耗时失败': 'Could not start review timing',
-    };
-    return '${labels[errorWithDetail.group(1)]}: ${text(errorWithDetail.group(2)!)}';
-  }
-  final engineDetail = RegExp(r'^(无法向 Engine 发送请求|请求处理超时)：(.+)$').firstMatch(normalized);
-  if (engineDetail != null) {
-    final label = engineDetail.group(1) == '请求处理超时'
-        ? 'Request timed out'
-        : 'Could not send the request to Engine';
-    return '$label: ${text(engineDetail.group(2)!)}';
-  }
-  final exited = RegExp(r'^Engine 进程已退出（exitCode=(\d+)）(?:[：:](.+))?$').firstMatch(normalized);
-  if (exited != null) {
-    return 'Engine process exited (exitCode=${exited.group(1)})${exited.group(2) == null ? '' : ': ${text(exited.group(2)!.trim())}'}';
-  }
+    final codedError = RegExp(
+      r'^([A-Z][A-Z0-9_]+): (.+)$',
+    ).firstMatch(normalized);
+    if (codedError != null) {
+      return '${codedError.group(1)}: ${text(codedError.group(2)!)}';
+    }
+    final errorWithDetail = RegExp(
+      r'^(视频预览加载失败|自动切换标记画面失败|标记画面切换失败|任务状态加载失败|导出记录加载失败|关闭项目失败|退出前保存项目失败|候选片段加载失败|开始记录审核耗时失败)：(.+)$',
+    ).firstMatch(normalized);
+    if (errorWithDetail != null) {
+      const labels = <String, String>{
+        '视频预览加载失败': 'Video preview failed',
+        '自动切换标记画面失败': 'Could not switch the marked frame',
+        '标记画面切换失败': 'Could not switch the marked frame',
+        '任务状态加载失败': 'Could not load task status',
+        '导出记录加载失败': 'Could not load export history',
+        '关闭项目失败': 'Could not close the project',
+        '退出前保存项目失败': 'Could not save the project before exit',
+        '候选片段加载失败': 'Could not load candidate clips',
+        '开始记录审核耗时失败': 'Could not start review timing',
+      };
+      return '${labels[errorWithDetail.group(1)]}: ${text(errorWithDetail.group(2)!)}';
+    }
+    final engineDetail = RegExp(
+      r'^(无法向 Engine 发送请求|请求处理超时)：(.+)$',
+    ).firstMatch(normalized);
+    if (engineDetail != null) {
+      final label = engineDetail.group(1) == '请求处理超时'
+          ? 'Request timed out'
+          : 'Could not send the request to Engine';
+      return '$label: ${text(engineDetail.group(2)!)}';
+    }
+    final exited = RegExp(
+      r'^Engine 进程已退出（exitCode=(\d+)）(?:[：:](.+))?$',
+    ).firstMatch(normalized);
+    if (exited != null) {
+      return 'Engine process exited (exitCode=${exited.group(1)})${exited.group(2) == null ? '' : ': ${text(exited.group(2)!.trim())}'}';
+    }
     final missingId = RegExp(r'^Engine 返回的 (.+) 缺少 id$').firstMatch(normalized);
     if (missingId != null) {
       return 'Engine response for ${missingId.group(1)} is missing an id';
@@ -79,33 +87,52 @@ extension BheBuildContextText on BuildContext {
 }
 
 String? _translateDynamic(String source) {
-  final missingOpened = RegExp(r'^第 ([\d、]+) 段的原视频找不到，请在导入页重新定位$').firstMatch(source);
+  final missingOpened = RegExp(
+    r'^第 ([\d、]+) 段的原视频找不到，请在导入页重新定位$',
+  ).firstMatch(source);
   if (missingOpened != null) {
     return 'The original video for part ${missingOpened.group(1)!.replaceAll('、', ', ')} is missing - relink it on the Import page';
   }
-  final missingSkipped = RegExp(r'^第 ([\d、]+) 段的原视频找不到，已跳过；请在导入页重新定位后再分析$').firstMatch(source);
+  final missingSkipped = RegExp(
+    r'^第 ([\d、]+) 段的原视频找不到，已跳过；请在导入页重新定位后再分析$',
+  ).firstMatch(source);
   if (missingSkipped != null) {
     return 'The original video for part ${missingSkipped.group(1)!.replaceAll('、', ', ')} is missing, so it was skipped - relink it on the Import page, then analyse';
   }
   final volumePercent = RegExp(r'^音量 (\d+)%$').firstMatch(source);
   if (volumePercent != null) return 'Volume ${volumePercent.group(1)}%';
+  final coverDuration = RegExp(r'^封面时长 (\d+) 秒$').firstMatch(source);
+  if (coverDuration != null)
+    return 'Cover duration: ${coverDuration.group(1)} seconds';
+  final bgmVolume = RegExp(r'^背景音乐音量 (\d+)%$').firstMatch(source);
+  if (bgmVolume != null)
+    return 'Background music volume ${bgmVolume.group(1)}%';
   final exportElapsed = RegExp(r'^已用 (\d+:\d+(?::\d+)?)$').firstMatch(source);
   if (exportElapsed != null) return 'Elapsed ${exportElapsed.group(1)}';
-  final savedPath = RegExp(r'^项目(可能)?保存在：([\s\S]+)，可在首页「打开项目」选择该文件夹。$').firstMatch(source);
+  final savedPath = RegExp(
+    r'^项目(可能)?保存在：([\s\S]+)，可在首页「打开项目」选择该文件夹。$',
+  ).firstMatch(source);
   if (savedPath != null) {
-    final prefix = savedPath.group(1) == null ? 'Project saved at' : 'Project may have been saved at';
+    final prefix = savedPath.group(1) == null
+        ? 'Project saved at'
+        : 'Project may have been saved at';
     return '$prefix: ${savedPath.group(2)}. Select this folder using “Open project” on the home screen.';
   }
   final historyMore = RegExp(r'^查看全部 (\d+) 条$').firstMatch(source);
   if (historyMore != null) return 'View all ${historyMore.group(1)} entries';
   final labelBatch = RegExp(r'^已完成 (\d+)/(\d+) 个标签$').firstMatch(source);
-  if (labelBatch != null) return '${labelBatch.group(1)}/${labelBatch.group(2)} labels completed';
+  if (labelBatch != null)
+    return '${labelBatch.group(1)}/${labelBatch.group(2)} labels completed';
   final labelProgress = RegExp(r'^正在合成标签 (\d+)/(\d+)：(.+)$').firstMatch(source);
-  if (labelProgress != null) return 'Merging label ${labelProgress.group(1)}/${labelProgress.group(2)}: ${labelProgress.group(3) == '未标记' ? 'Unlabelled' : labelProgress.group(3)}';
+  if (labelProgress != null)
+    return 'Merging label ${labelProgress.group(1)}/${labelProgress.group(2)}: ${labelProgress.group(3) == '未标记' ? 'Unlabelled' : labelProgress.group(3)}';
   final mobileFormat = RegExp(r'^这个视频的格式（(.+)）手机无法处理。$').firstMatch(source);
-  if (mobileFormat != null) return 'This phone cannot process this video format (${mobileFormat.group(1)}).';
+  if (mobileFormat != null)
+    return 'This phone cannot process this video format (${mobileFormat.group(1)}).';
 
-  final gameStatsSummary = RegExp(r'^保留 (\d+) 个(?: · 命中率估算 (\d+)%)?$').firstMatch(source);
+  final gameStatsSummary = RegExp(
+    r'^保留 (\d+) 个(?: · 命中率估算 (\d+)%)?$',
+  ).firstMatch(source);
   if (gameStatsSummary != null) {
     final rate = gameStatsSummary.group(2);
     return rate == null
@@ -115,7 +142,9 @@ String? _translateDynamic(String source) {
   final untaggedReminder = RegExp(r'^还有 (\d+) 个片段未标标签$').firstMatch(source);
   if (untaggedReminder != null) {
     final n = untaggedReminder.group(1);
-    return n == '1' ? '1 clip is still untagged' : '$n clips are still untagged';
+    return n == '1'
+        ? '1 clip is still untagged'
+        : '$n clips are still untagged';
   }
   final historyPartial = RegExp(r'^部分完成 (\d+)/(\d+)$').firstMatch(source);
   if (historyPartial != null) {
@@ -141,7 +170,8 @@ String? _translateDynamic(String source) {
     return minutes.group(1) == null ? range : 'Part ${minutes.group(1)} $range';
   }
   final missingFile = RegExp(r'^找不到文件或文件夹：(.+)$').firstMatch(source);
-  if (missingFile != null) return 'File or folder not found: ${missingFile.group(1)}';
+  if (missingFile != null)
+    return 'File or folder not found: ${missingFile.group(1)}';
   final accessDenied = RegExp(r'^没有权限访问：(.+)$').firstMatch(source);
   if (accessDenied != null) return 'Access denied: ${accessDenied.group(1)}';
   final newVersion = RegExp(r'^(发现新版本|新版本) v(.+)$').firstMatch(source);
@@ -149,12 +179,15 @@ String? _translateDynamic(String source) {
     return '${newVersion.group(1) == '发现新版本' ? 'New version available' : 'New version'}: v${newVersion.group(2)}';
   }
   final latest = RegExp(r'^已经是最新版本（v(.+)）$').firstMatch(source);
-  if (latest != null) return 'You are on the latest version (v${latest.group(1)})';
+  if (latest != null)
+    return 'You are on the latest version (v${latest.group(1)})';
   final downloaded = RegExp(r'^已下载 (\d+) / (\d+) MB$').firstMatch(source);
   if (downloaded != null) {
     return 'Downloaded ${downloaded.group(1)} / ${downloaded.group(2)} MB';
   }
-  final httpFailure = RegExp(r'^(获取更新信息失败|下载失败)（HTTP (\d+)）$').firstMatch(source);
+  final httpFailure = RegExp(
+    r'^(获取更新信息失败|下载失败)（HTTP (\d+)）$',
+  ).firstMatch(source);
   if (httpFailure != null) {
     return '${httpFailure.group(1) == '下载失败' ? 'Download failed' : 'Could not get update information'} (HTTP ${httpFailure.group(2)})';
   }
@@ -323,7 +356,8 @@ String? _translateDynamic(String source) {
   final candidateAt = RegExp(r'^候选 (.+)$').firstMatch(source);
   if (candidateAt != null) return 'Candidate ${candidateAt.group(1)}';
   final duration = RegExp(r'^时长 (.+)$').firstMatch(source);
-  if (duration != null) return 'Duration ${_englishDuration(duration.group(1)!)}';
+  if (duration != null)
+    return 'Duration ${_englishDuration(duration.group(1)!)}';
   final selectedCount = RegExp(r'^已选 (\d+) / (\d+)$').firstMatch(source);
   if (selectedCount != null) {
     return 'Included ${selectedCount.group(1)} / ${selectedCount.group(2)}';
@@ -335,7 +369,8 @@ String? _translateDynamic(String source) {
     return 'About ${estimatedMinutes.group(1)} min';
   }
   final minutesWithUnit = RegExp(r'^(\d+) 分 (\d+) 秒$').firstMatch(source);
-  if (minutesWithUnit != null) return '${minutesWithUnit.group(1)} min ${minutesWithUnit.group(2)} sec';
+  if (minutesWithUnit != null)
+    return '${minutesWithUnit.group(1)} min ${minutesWithUnit.group(2)} sec';
   final analysisDetail = RegExp(r'^分析详情：(.+)$').firstMatch(source);
   if (analysisDetail != null) {
     var detail = analysisDetail.group(1)!;
@@ -383,7 +418,8 @@ String? _translateDynamic(String source) {
     return '${startEnd.group(1) == '起点' ? 'Start' : 'End'} ${startEnd.group(2)}';
   }
   final currentPosition = RegExp(r'^当前位置 (.+)$').firstMatch(source);
-  if (currentPosition != null) return 'Current position ${currentPosition.group(1)}';
+  if (currentPosition != null)
+    return 'Current position ${currentPosition.group(1)}';
   final currentRegion = RegExp(r'^当前区域 (.+)$').firstMatch(source);
   if (currentRegion != null) return 'Current region ${currentRegion.group(1)}';
   final currentTime = RegExp(r'^当前 (.+)$').firstMatch(source);
@@ -411,7 +447,8 @@ String? _translateDynamic(String source) {
     return '${stepStatus.group(1)}, ${stepStatus.group(2) == '已完成' ? 'complete' : 'incomplete'}';
   }
   final autoFrame = RegExp(r'^系统已自动选择 (.+) 作为标记画面$').firstMatch(source);
-  if (autoFrame != null) return 'Automatically selected ${autoFrame.group(1)} as the marked frame';
+  if (autoFrame != null)
+    return 'Automatically selected ${autoFrame.group(1)} as the marked frame';
   final videoWithoutAudio = RegExp(r'^(.+ / )无音频$').firstMatch(source);
   if (videoWithoutAudio != null) {
     return '${videoWithoutAudio.group(1)}No audio';
@@ -438,7 +475,8 @@ const _englishText = <String, String>{
   '重叠': 'Overlap',
   '诊断信息暂时不可用。': 'Diagnostics are temporarily unavailable.',
   '反馈与诊断': 'Feedback and diagnostics',
-  '遇到问题时，把下面的信息发给我们。已隐藏你的用户名和文件路径。': 'If you encounter a problem, send us the information below. Your username and file paths have been hidden.',
+  '遇到问题时，把下面的信息发给我们。已隐藏你的用户名和文件路径。':
+      'If you encounter a problem, send us the information below. Your username and file paths have been hidden.',
   '已复制': 'Copied',
   '在 GitHub 反馈': 'Report on GitHub',
   '反馈': 'Feedback',
@@ -460,20 +498,30 @@ const _englishText = <String, String>{
   '没有找到运行日志': 'No logs found',
   '运行日志暂不可用': 'Logs are temporarily unavailable',
   '复制失败，请重试。': 'Could not copy. Please try again.',
-  '无法打开反馈入口，请先复制诊断信息。': 'Could not open the feedback destination. Please copy the diagnostics first.',
-  '手机存储空间不足，请清理后重试。': 'Your phone is running out of storage. Free up space and try again.',
-  '没有读取这个文件的权限，请重新选择。': 'There is no permission to read this file. Please choose it again.',
-  '更新安装包找不到了，请重新下载。': 'The update package is missing. Please download it again.',
+  '无法打开反馈入口，请先复制诊断信息。':
+      'Could not open the feedback destination. Please copy the diagnostics first.',
+  '手机存储空间不足，请清理后重试。':
+      'Your phone is running out of storage. Free up space and try again.',
+  '没有读取这个文件的权限，请重新选择。':
+      'There is no permission to read this file. Please choose it again.',
+  '更新安装包找不到了，请重新下载。':
+      'The update package is missing. Please download it again.',
   '文件找不到了，请重新选择。': 'The file is missing. Please choose it again.',
-  '设置无效，请检查视频范围后重试。': 'The settings are invalid. Check the video range and try again.',
+  '设置无效，请检查视频范围后重试。':
+      'The settings are invalid. Check the video range and try again.',
   '这个视频的格式手机无法处理。': 'This phone cannot process this video format.',
-  '出错了：视频分析未完成，请重试。': 'Something went wrong: video analysis did not finish. Please try again.',
-  '出错了：视频导出未完成，请重试。': 'Something went wrong: video export did not finish. Please try again.',
+  '出错了：视频分析未完成，请重试。':
+      'Something went wrong: video analysis did not finish. Please try again.',
+  '出错了：视频导出未完成，请重试。':
+      'Something went wrong: video export did not finish. Please try again.',
   '无法打开分享面板，请重试。': "Couldn't open the share sheet. Please try again.",
   '无法保存到相册，请重试。': "Couldn't save to Photos. Please try again.",
-  '没有相册保存权限，请在系统设置中允许 BHE 添加照片。': 'BHE does not have permission to save to Photos. Allow photo access in Settings and try again.',
-  '出错了：更新操作未完成，请重试。': 'Something went wrong: the update did not finish. Please try again.',
-  '出错了：操作未完成，请重试。': 'Something went wrong: the operation did not finish. Please try again.',
+  '没有相册保存权限，请在系统设置中允许 BHE 添加照片。':
+      'BHE does not have permission to save to Photos. Allow photo access in Settings and try again.',
+  '出错了：更新操作未完成，请重试。':
+      'Something went wrong: the update did not finish. Please try again.',
+  '出错了：操作未完成，请重试。':
+      'Something went wrong: the operation did not finish. Please try again.',
   '重命名项目': 'Rename project',
   '项目列表': 'Projects',
   '还没有项目': 'No projects yet',
@@ -485,10 +533,12 @@ const _englishText = <String, String>{
   '已分析': 'Analyzed',
   '分析中断': 'Analysis interrupted',
   '加载项目失败': 'Could not load projects',
-  '删除未完成，部分文件可能已移除，请刷新项目列表。': 'Deletion did not finish. Some files may already be removed; refresh the project list.',
+  '删除未完成，部分文件可能已移除，请刷新项目列表。':
+      'Deletion did not finish. Some files may already be removed; refresh the project list.',
   '部分项目读取失败，查看反馈': 'Some projects could not be read; view diagnostics',
   '新建项目，或从最近项目中打开一个': 'Create a project or open one from recent projects.',
-  '将删除项目及应用内视频副本、封面和导出文件；不会删除原视频或相册中的文件。': 'This removes the project and its app-owned video copy, cover, and exports. The original video and files in your gallery are not deleted.',
+  '将删除项目及应用内视频副本、封面和导出文件；不会删除原视频或相册中的文件。':
+      'This removes the project and its app-owned video copy, cover, and exports. The original video and files in your gallery are not deleted.',
   '输出方式': 'Output mode',
   '导出历史': 'Export history',
   '暂无导出记录': 'No export history',
@@ -550,14 +600,20 @@ const _englishText = <String, String>{
   '已调整时长': 'Duration adjusted',
   '与上一段重叠': 'Overlaps the previous kept clip',
   '视频不可用': 'Video unavailable',
-  '正在读取视频信息，大文件可能需要几秒。': 'Reading video information. Large files may take a few seconds.',
-  '正在保存视频到本机，大文件可能需要几秒。': 'Saving the video locally. Large files may take a few seconds.',
-  '正在识别篮筐区域，大文件可能需要几秒。': 'Detecting the hoop region. Large files may take a few seconds.',
+  '正在读取视频信息，大文件可能需要几秒。':
+      'Reading video information. Large files may take a few seconds.',
+  '正在保存视频到本机，大文件可能需要几秒。':
+      'Saving the video locally. Large files may take a few seconds.',
+  '正在识别篮筐区域，大文件可能需要几秒。':
+      'Detecting the hoop region. Large files may take a few seconds.',
 
   '导出成功，部分音轨无法保留': 'Export complete. Some audio tracks could not be kept.',
-  '视频文件找不到了，请重新选择原视频。': 'The video file is missing. Choose the original video again.',
-  '这个视频无法播放，请重新选择原视频。': 'This video cannot be played. Choose the original video again.',
-  '所选视频与项目记录不一致，请选择原始视频。': 'The selected video does not match this project. Choose the original video.',
+  '视频文件找不到了，请重新选择原视频。':
+      'The video file is missing. Choose the original video again.',
+  '这个视频无法播放，请重新选择原视频。':
+      'This video cannot be played. Choose the original video again.',
+  '所选视频与项目记录不一致，请选择原始视频。':
+      'The selected video does not match this project. Choose the original video.',
   '重新选择视频': 'Choose video again',
   '正在重新选择视频': 'Choosing the source video',
   '正在取消': 'Cancelling',
@@ -582,8 +638,7 @@ const _englishText = <String, String>{
       'If convenient, compress the video with an editing tool before importing. You can also continue; the source video will not be modified.',
   '进球前后时间会以每个候选的进球时刻为中心计算。':
       'The before and after durations are calculated around each candidate event time.',
-  '关闭时自动保留手动调整的范围':
-      'When off, manually adjusted ranges are kept',
+  '关闭时自动保留手动调整的范围': 'When off, manually adjusted ranges are kept',
   '检测区域': 'Detection regions',
   '选中': 'Include',
   '以下是自动生成候选的默认范围，审核时仍可单独调整片段。':
@@ -641,8 +696,7 @@ const _englishText = <String, String>{
       'Fast mode may miss clips. Analyze again in standard mode.',
   '重新分析直接使用当前配置；重新配置可以修改分析范围和篮筐区域。':
       'Analyze again with the current setup, or reconfigure the analysis range and hoop region.',
-  '先导入视频并完成配置，再开始分析。':
-      'Import a video and finish setup before analyzing.',
+  '先导入视频并完成配置，再开始分析。': 'Import a video and finish setup before analyzing.',
   '重新配置': 'Reconfigure',
   '去导入视频': 'Import a video',
   '保留片段 (C / Enter)': 'Include clip (C / Enter)',
@@ -671,13 +725,17 @@ const _englishText = <String, String>{
   '保存结果': 'Save results',
   '分析已取消': 'Analysis cancelled',
   '正在检查视频': 'Checking video',
-  '上次分析尚未确认停止，暂时不能导出。': 'The previous analysis has not been confirmed stopped. Export is unavailable.',
+  '上次分析尚未确认停止，暂时不能导出。':
+      'The previous analysis has not been confirmed stopped. Export is unavailable.',
   '正在分析，请等待分析结束。': 'Analysis is running. Wait for it to finish.',
   '正在导出，请等待导出结束。': 'Export is running. Wait for it to finish.',
-  '上次任务尚未确认结束，请先确认停止。': 'The previous task has not been confirmed stopped. Check its status first.',
+  '上次任务尚未确认结束，请先确认停止。':
+      'The previous task has not been confirmed stopped. Check its status first.',
   '正在准备本地模型': 'Preparing the local model',
-  '上次分析尚未确认停止，暂时不能开始新分析。': 'The previous analysis may still be running. A new analysis cannot start yet.',
-  '请先复制诊断信息；若仍无法确认，请在系统设置中强制停止 BHE，重新打开后检查项目。': 'Copy diagnostics first. If the status remains unknown, force stop BHE in system settings, reopen it, and check the project.',
+  '上次分析尚未确认停止，暂时不能开始新分析。':
+      'The previous analysis may still be running. A new analysis cannot start yet.',
+  '请先复制诊断信息；若仍无法确认，请在系统设置中强制停止 BHE，重新打开后检查项目。':
+      'Copy diagnostics first. If the status remains unknown, force stop BHE in system settings, reopen it, and check the project.',
   '正在准备本地分析': 'Preparing local analysis',
   '正在分析视频': 'Analyzing video',
   '正在生成低分辨率代理视频': 'Generating a low-resolution proxy video',
@@ -690,15 +748,20 @@ const _englishText = <String, String>{
   '大文件可能需要几秒': 'Large files may take a few seconds',
   '正在准备合并导出': 'Preparing merged export',
   '正在结束上一次导出': 'Finishing the previous export',
-  '上次任务尚未确认结束，暂时不能开始新的同类任务。': 'The previous task may still be running. A new task of this kind cannot start yet.',
-  '请先复制诊断信息；若仍无法确认，请在系统设置中强制停止 BHE，重新打开后检查项目和已导出文件。': 'Copy the diagnostics first. If the status remains unknown, force stop BHE in system settings, reopen it, and check your project and exported files.',
+  '上次任务尚未确认结束，暂时不能开始新的同类任务。':
+      'The previous task may still be running. A new task of this kind cannot start yet.',
+  '请先复制诊断信息；若仍无法确认，请在系统设置中强制停止 BHE，重新打开后检查项目和已导出文件。':
+      'Copy the diagnostics first. If the status remains unknown, force stop BHE in system settings, reopen it, and check your project and exported files.',
   '再次尝试停止': 'Try stopping again',
   '检查停止状态': 'Check status',
   '诊断与复制': 'Diagnostics and copy',
-  '上次任务仍在运行，请稍候或再次尝试停止。': 'The previous task is still running. Please wait or try stopping it again.',
+  '上次任务仍在运行，请稍候或再次尝试停止。':
+      'The previous task is still running. Please wait or try stopping it again.',
   '无法确认上次任务是否停止。': 'Could not confirm whether the previous task has stopped.',
-  '这个输出文件正在导出，请稍后重试。': 'This output is already being exported. Please try again later.',
-  '上一次导出尚未结束，请稍后重试。': 'The previous export has not finished. Please try again later.',
+  '这个输出文件正在导出，请稍后重试。':
+      'This output is already being exported. Please try again later.',
+  '上一次导出尚未结束，请稍后重试。':
+      'The previous export has not finished. Please try again later.',
   '合并导出完成': 'Merged export complete',
   '导出已取消': 'Export cancelled',
   '已导出': 'Exported',
@@ -919,8 +982,7 @@ const _englishText = <String, String>{
       'The source video is unavailable, so the clip range cannot be previewed.',
   '预测篮球继续下落后的落点是否接近篮筐中心，不是进球概率。':
       'Whether the ball would land near the hoop center if it continued downward; this is not a make probability.',
-  '补漏片段没有模型预测评分。':
-      'Manually added clips have no model prediction score.',
+  '补漏片段没有模型预测评分。': 'Manually added clips have no model prediction score.',
   '复核': 'Review',
   '系统说明': 'System note',
   '写备注': 'Add note',
@@ -1060,18 +1122,27 @@ const _englishText = <String, String>{
   '导入失败，项目已保留': 'Import failed. The project was kept',
   '校验原视频': 'Checking source video',
   '复核原视频': 'Rechecking source video',
-  '导出启动结果尚未确认，请重新连接后检查现有任务。': 'Export start is unconfirmed. Reconnect and check existing tasks.',
-  '导出任务保护状态读取失败，已忽略': 'Could not read export protection status; it was ignored.',
-  '上一次导出启动结果未确认，请先查看导出任务': 'The previous export start is unconfirmed. Check export tasks first.',
-  '未找到可确认的导出任务，请检查后再决定是否允许重新导出。': 'No matching export task was found. Check before allowing another export.',
+  '导出启动结果尚未确认，请重新连接后检查现有任务。':
+      'Export start is unconfirmed. Reconnect and check existing tasks.',
+  '导出任务保护状态读取失败，已忽略':
+      'Could not read export protection status; it was ignored.',
+  '上一次导出启动结果未确认，请先查看导出任务':
+      'The previous export start is unconfirmed. Check export tasks first.',
+  '未找到可确认的导出任务，请检查后再决定是否允许重新导出。':
+      'No matching export task was found. Check before allowing another export.',
   '查看导出任务': 'Check export tasks',
-  '导出任务状态无法保存，请下次打开项目时重新检查。': 'Could not save export status. Check again when reopening the project.',
-  '无法保存导出任务状态，未开始导出。': 'Could not save export status. The export was not started.',
+  '导出任务状态无法保存，请下次打开项目时重新检查。':
+      'Could not save export status. Check again when reopening the project.',
+  '无法保存导出任务状态，未开始导出。':
+      'Could not save export status. The export was not started.',
   '允许再次导出？': 'Allow another export?',
-  '请先检查导出任务和已生成的文件。上一次导出可能仍在运行或已经完成。': 'Check export tasks and generated files first. The previous export may still be running or may have finished.',
+  '请先检查导出任务和已生成的文件。上一次导出可能仍在运行或已经完成。':
+      'Check export tasks and generated files first. The previous export may still be running or may have finished.',
   '已检查，允许再次导出': 'Checked, allow another export',
-  '原项目没有视频指纹，无法比对原视频内容。': 'This project has no video fingerprint; the source content cannot be compared.',
-  '项目正在导出，请等待完成或取消': 'The project is exporting. Wait for it to finish or cancel it.',
+  '原项目没有视频指纹，无法比对原视频内容。':
+      'This project has no video fingerprint; the source content cannot be compared.',
+  '项目正在导出，请等待完成或取消':
+      'The project is exporting. Wait for it to finish or cancel it.',
   '导入未确认，项目已保留': 'Import was not confirmed. The project was kept',
   '项目可能已创建': 'The project may have been created',
   '复制项目路径': 'Copy project path',
@@ -1155,13 +1226,16 @@ const _englishText = <String, String>{
   '这个分组还没有球员': 'This group has no players yet',
   '球员名单': 'Player roster',
   '正在读取球员分组…': 'Loading player groups…',
-  '还没有球员分组，可以在审核页把球员存为分组。': 'No player groups yet. Save players as a group on the review page.',
+  '还没有球员分组，可以在审核页把球员存为分组。':
+      'No player groups yet. Save players as a group on the review page.',
   '选择球员分组': 'Choose a player group',
   '不使用': 'None',
   '设为默认': 'Set as default',
   '取消默认': 'Clear default',
-  '项目已有球员。选择分组可追加名单，不会删除或调整现有球员。': 'This project already has players. Choose a group to add players without removing or reordering existing players.',
-  '只勾选本次出场的球员，不会修改分组。': 'Select the players attending this time. The saved group stays unchanged.',
+  '项目已有球员。选择分组可追加名单，不会删除或调整现有球员。':
+      'This project already has players. Choose a group to add players without removing or reordering existing players.',
+  '只勾选本次出场的球员，不会修改分组。':
+      'Select the players attending this time. The saved group stays unchanged.',
   '分组名不能为空': 'Enter a group name.',
   '分组名已存在，请使用其他名称': 'This group name already exists. Choose another name.',
   '球员名不能为空': 'Enter a player name.',
@@ -1169,7 +1243,8 @@ const _englishText = <String, String>{
   '编辑球员分组': 'Edit player group',
   '分组名称': 'Group name',
   '球员姓名': 'Player name',
-  '拖动调整顺序，顺序对应球员快捷键（1–9、Q–P）。': 'Drag to reorder. Player order determines keyboard shortcuts (1–9, Q–P).',
+  '拖动调整顺序，顺序对应球员快捷键（1–9、Q–P）。':
+      'Drag to reorder. Player order determines keyboard shortcuts (1–9, Q–P).',
   '拖动调整顺序': 'Drag to reorder',
   '移除球员': 'Remove player',
   '还没有球员，请添加。': 'No players yet. Add a player.',
@@ -1211,8 +1286,7 @@ const _englishText = <String, String>{
   '开始前预计耗时：': 'Estimated time before analysis: ',
   '\n实际耗时会受视频编码、磁盘和设备负载影响。':
       '\nActual time depends on video encoding, disk, and device load.',
-  '选择原始视频后即可框选篮筐区域。':
-      'Choose a source video to mark the hoop region.',
+  '选择原始视频后即可框选篮筐区域。': 'Choose a source video to mark the hoop region.',
   '视频元数据已读取，可以重新生成预览后继续框选。':
       'Video metadata is ready. Regenerate the preview to continue marking the region.',
   '预览准备好后即可拖拽框选篮筐区域。':
@@ -1229,8 +1303,7 @@ const _englishText = <String, String>{
       'Measures motion in the white net area after the ball passes; lighting and player occlusion can affect it.',
   '检测篮球撞框后向上或向外回弹；出现反弹通常降低进球可能性。':
       'Checks whether the ball rebounds upward or outward after hitting the rim; a rebound usually lowers the chance of a make.',
-  '从原视频当前时间补漏候选':
-      'Add a missing candidate at the current source-video time',
+  '从原视频当前时间补漏候选': 'Add a missing candidate at the current source-video time',
   '未找到可用的邮件客户端，请手动联系反馈邮箱。':
       'No mail client is available. Contact the feedback email manually.',
   '篮球高光视频助手': 'Basketball Highlight Editor',
@@ -1274,25 +1347,34 @@ const _englishText = <String, String>{
   '进球时刻': 'Shot moment',
   '原范围': 'Original range',
   '片段时间轴': 'Clip timeline',
-  '拖动两端调整范围，点时间轴跳到该位置。': 'Drag either end to adjust the range; tap the timeline to jump there.',
+  '拖动两端调整范围，点时间轴跳到该位置。':
+      'Drag either end to adjust the range; tap the timeline to jump there.',
   '按原视频逐帧放大篮筐区域，确认球从篮筐上方进入、被篮网遮挡并从网底落下。只有看清球没进的候选会自动排除；没看清的保留并标为未确认，都可以随时修改。':
       'Zooms into the rim on every source frame to confirm the ball enters from above, is hidden by the net and drops out of the bottom. Only candidates clearly seen missing are auto-excluded; unclear ones stay and are marked unsure. You can change any of them.',
   '通过：球穿过篮网落下': 'Passed: the ball dropped through the net',
   '未通过：没有看到球穿过篮筐': 'Failed: no ball was seen crossing the rim',
   '未通过：球不是从篮筐上方落下': 'Failed: the ball did not come down from above the rim',
   '未通过：球偏离篮筐口': 'Failed: the ball missed the rim opening',
-  '未通过：没有看到球从网底落下': 'Failed: the ball was not seen leaving the bottom of the net',
+  '未通过：没有看到球从网底落下':
+      'Failed: the ball was not seen leaving the bottom of the net',
   '未通过：球从篮网侧面出来': 'Failed: the ball left from the side of the net',
   '未通过：球在篮筐附近弹起': 'Failed: the ball bounced up near the rim',
-  '未通过：球从篮筐前方掠过，没有进网': 'Failed: the ball passed in front of the rim, not through the net',
+  '未通过：球从篮筐前方掠过，没有进网':
+      'Failed: the ball passed in front of the rim, not through the net',
   '未通过：球落下时篮网没有动': 'Failed: the net did not move when the ball came down',
-  '未确认：没看清球是否穿过篮筐，请人工确认': 'Unsure: the ball crossing the rim was not seen clearly, please review',
-  '未确认：没看清球是否从篮筐上方落下，请人工确认': 'Unsure: the ball coming down from above the rim was not seen clearly, please review',
-  '未确认：没看清球是否从网底落下，请人工确认': 'Unsure: the ball leaving the bottom of the net was not seen clearly, please review',
-  '未确认：球像是偏离篮筐口，但轨迹不像一颗下落的球，请人工确认': 'Unsure: the ball seems to miss the rim opening, but the track does not look like a falling ball, please review',
-  '未确认：球全程可见，这个视频的篮网不一定挡得住球，请人工确认': 'Unsure: the ball stayed visible, but the net in this video may not hide it, please review',
+  '未确认：没看清球是否穿过篮筐，请人工确认':
+      'Unsure: the ball crossing the rim was not seen clearly, please review',
+  '未确认：没看清球是否从篮筐上方落下，请人工确认':
+      'Unsure: the ball coming down from above the rim was not seen clearly, please review',
+  '未确认：没看清球是否从网底落下，请人工确认':
+      'Unsure: the ball leaving the bottom of the net was not seen clearly, please review',
+  '未确认：球像是偏离篮筐口，但轨迹不像一颗下落的球，请人工确认':
+      'Unsure: the ball seems to miss the rim opening, but the track does not look like a falling ball, please review',
+  '未确认：球全程可见，这个视频的篮网不一定挡得住球，请人工确认':
+      'Unsure: the ball stayed visible, but the net in this video may not hide it, please review',
   '未确认：请人工确认': 'Unsure: please review',
-  '未复核：篮筐在画面中太小，请人工确认': 'Not checked: the rim is too small in the frame, please review manually',
+  '未复核：篮筐在画面中太小，请人工确认':
+      'Not checked: the rim is too small in the frame, please review manually',
   '未复核：请人工确认': 'Not checked: please review manually',
   'Engine 返回未知错误': 'Engine returned an unknown error',
   'Engine 已关闭': 'Engine is closed',
@@ -1339,8 +1421,7 @@ const _englishText = <String, String>{
       'The video content does not match the project record. Previous candidates and ROI were cleared; set them again before analyzing.',
   '视频已重新定位，项目数据和审核记录已保留':
       'Video relinked; project data and review records were kept.',
-  '项目已删除（原始视频未删除）':
-      'Project deleted; the source video was not deleted',
+  '项目已删除（原始视频未删除）': 'Project deleted; the source video was not deleted',
   '请先设置投篮分析区': 'Set the shot analysis region first',
   '视频元数据尚未准备好': 'Video metadata is not ready yet',
   '视频分辨率无效': 'The video resolution is invalid',
@@ -1365,16 +1446,21 @@ const _englishText = <String, String>{
   '选择输出位置失败：': 'Could not choose an output location: ',
   '正在准备输出位置…': 'Preparing output location…',
   '跳过': 'Skip',
-  '选中一个候选就会播放对应的片段，每个候选前后会多留一点画面。': 'Pick a candidate to play that clip; each one includes a little footage before and after.',
-  '每一行是系统认为可能进球的一段。逐个看一遍，是进球就保留，不是就排除。': 'Each row is a moment the app thinks may be a made shot. Go through them: keep the goals, exclude the rest.',
+  '选中一个候选就会播放对应的片段，每个候选前后会多留一点画面。':
+      'Pick a candidate to play that clip; each one includes a little footage before and after.',
+  '每一行是系统认为可能进球的一段。逐个看一遍，是进球就保留，不是就排除。':
+      'Each row is a moment the app thinks may be a made shot. Go through them: keep the goals, exclude the rest.',
   '常用快捷键': 'Common shortcuts',
   '完整列表：右上角「更多」→「快捷键一览」': 'Full list: top-right "More" → "Keyboard shortcuts"',
   '给片段打球员标签': 'Tag a clip with a player',
-  '点这里选球员；还没有球员就新建，也可以从「球员分组」一键导入。打过标签，导出时可以每个球员各出一个视频。': 'Click here to pick a player; create one if there are none, or import a saved player group. Tagged clips can be exported as one video per player.',
+  '点这里选球员；还没有球员就新建，也可以从「球员分组」一键导入。打过标签，导出时可以每个球员各出一个视频。':
+      'Click here to pick a player; create one if there are none, or import a saved player group. Tagged clips can be exported as one video per player.',
   '片段前后不对？调范围': 'Clip starts or ends in the wrong place? Adjust the range',
-  '点这里打开范围编辑：拖动两端、拖到边缘继续延长，或播放到合适位置按 I 设为开始、O 设为结束。原视频不会被修改。': 'Open the range editor: drag either end (drag to the edge to extend), or play to the right spot and press I for start, O for end. Your original video is never changed.',
+  '点这里打开范围编辑：拖动两端、拖到边缘继续延长，或播放到合适位置按 I 设为开始、O 设为结束。原视频不会被修改。':
+      'Open the range editor: drag either end (drag to the edge to extend), or play to the right spot and press I for start, O for end. Your original video is never changed.',
   '候选预览 / 原视频': 'Candidate preview / Original video',
-  '切到「原视频」可以看整段录像、补上系统没找到的进球。': 'Switch to "Original" to watch the whole recording and add goals the app missed.',
+  '切到「原视频」可以看整段录像、补上系统没找到的进球。':
+      'Switch to "Original" to watch the whole recording and add goals the app missed.',
   '播放 / 暂停': 'Play / Pause',
   '后退 2 秒': 'Back 2 s',
   '加 Shift 后退 0.1 秒': 'Hold Shift to go back 0.1 s',
@@ -1394,26 +1480,38 @@ const _englishText = <String, String>{
   '把当前位置设为结束': 'Set current position as end',
   '前后 1 秒': '1 s back / forward',
   '按球员标签各出一个视频': 'One video per player tag',
-  '给候选打过球员标签后，这里会多出「每个标签各合成一个视频」：每个标签一个 MP4，文件名就是标签名。': 'Once candidates are tagged with players, "One video per tag" appears here: one MP4 per tag, named after the tag.',
+  '给候选打过球员标签后，这里会多出「每个标签各合成一个视频」：每个标签一个 MP4，文件名就是标签名。':
+      'Once candidates are tagged with players, "One video per tag" appears here: one MP4 per tag, named after the tag.',
   '导入分四步': 'Import in four steps',
-  '选视频 → 定分析范围 → 设检测区域 → 开始分析。上面的步骤条可以点回已经完成的步骤，设置会自动保存为草稿。': 'Pick a video → set the analysis range → set detection areas → start analysis. Click a finished step above to go back; settings are saved as a draft automatically.',
+  '选视频 → 定分析范围 → 设检测区域 → 开始分析。上面的步骤条可以点回已经完成的步骤，设置会自动保存为草稿。':
+      'Pick a video → set the analysis range → set detection areas → start analysis. Click a finished step above to go back; settings are saved as a draft automatically.',
   '先选原始视频': 'Pick the original video first',
-  '支持 MP4、MOV、M4V、AVI、MKV。同一场的多段视频可以一起选，会建成一个项目。原视频不会被修改或上传。': 'MP4, MOV, M4V, AVI and MKV are supported. Pick several videos from the same game together to make one project. Your original video is never changed or uploaded.',
+  '支持 MP4、MOV、M4V、AVI、MKV。同一场的多段视频可以一起选，会建成一个项目。原视频不会被修改或上传。':
+      'MP4, MOV, M4V, AVI and MKV are supported. Pick several videos from the same game together to make one project. Your original video is never changed or uploaded.',
   '只分析需要的一段': 'Analyze only the part you need',
-  '拖动时间轴两端，选出要分析的范围，比如跳过赛前热身；不确定就保持整段。范围越短，分析越快。': 'Drag both ends of the timeline to choose the range, e.g. skip the warm-up; keep the whole video if unsure. A shorter range analyzes faster.',
+  '拖动时间轴两端，选出要分析的范围，比如跳过赛前热身；不确定就保持整段。范围越短，分析越快。':
+      'Drag both ends of the timeline to choose the range, e.g. skip the warm-up; keep the whole video if unsure. A shorter range analyzes faster.',
   '框出篮筐': 'Mark the hoop',
-  '系统会先自动识别篮筐。不准的话在画面上拖动、缩放；篮筐被挡住时，先换一个画面时间再框。': 'The app detects the hoop automatically. If it is off, drag or resize on the picture; if the hoop is blocked, change the frame time first.',
+  '系统会先自动识别篮筐。不准的话在画面上拖动、缩放；篮筐被挡住时，先换一个画面时间再框。':
+      'The app detects the hoop automatically. If it is off, drag or resize on the picture; if the hoop is blocked, change the frame time first.',
   '橙色和白色两个区域': 'Two areas: orange and white',
-  '橙色区域覆盖来球轨迹、篮圈和落球范围，用来跟踪球；白色区域只盖篮网摆动范围。点这两个按钮切换要编辑的区域，改动自动保存。': "The orange area covers the ball's path, the rim and where the ball lands; the white area covers only the net's swing. Use these two buttons to switch which one you edit; changes save automatically.",
+  '橙色区域覆盖来球轨迹、篮圈和落球范围，用来跟踪球；白色区域只盖篮网摆动范围。点这两个按钮切换要编辑的区域，改动自动保存。':
+      "The orange area covers the ball's path, the rim and where the ball lands; the white area covers only the net's swing. Use these two buttons to switch which one you edit; changes save automatically.",
   '每个进球留多长': 'How long is each goal clip',
-  '设置进球前、后各保留几秒。后面审核时，每个片段还能单独调整。': 'Set how many seconds to keep before and after each goal. You can still adjust each clip during review.',
+  '设置进球前、后各保留几秒。后面审核时，每个片段还能单独调整。':
+      'Set how many seconds to keep before and after each goal. You can still adjust each clip during review.',
   '标准还是快速': 'Standard or fast',
-  '标准分析更完整、漏检少，推荐；快速分析更快，但可能漏掉少量片段。': 'Standard analysis is more thorough and misses less (recommended); fast analysis is quicker but may miss a few clips.',
+  '标准分析更完整、漏检少，推荐；快速分析更快，但可能漏掉少量片段。':
+      'Standard analysis is more thorough and misses less (recommended); fast analysis is quicker but may miss a few clips.',
   '开始分析': 'Start analysis',
-  '点右下角的按钮开始（多段视频先保存这一段的设置，再在列表里「分析全部」）。分析在后台进行，结束后到「审核」页逐个确认候选。': "Click the button at the bottom right to start (with several videos, save this one's settings, then \"Analyze all\" in the list). Analysis runs in the background; when done, check candidates one by one on the Review page.",
-  '正确：橙色框盖住来球轨迹、篮圈和网下落球范围，白色虚线框只盖篮网': "Right: the orange box covers the ball's path, the rim and where the ball lands; the white dashed box covers only the net",
-  '太大：别把整块篮板、球员和地面框进去': "Too big: don't include the whole backboard, players or floor",
-  '太小：只框篮圈，球一靠近或落下就出框': "Too small: a box on the rim alone loses the ball as soon as it comes near or drops",
+  '点右下角的按钮开始（多段视频先保存这一段的设置，再在列表里「分析全部」）。分析在后台进行，结束后到「审核」页逐个确认候选。':
+      "Click the button at the bottom right to start (with several videos, save this one's settings, then \"Analyze all\" in the list). Analysis runs in the background; when done, check candidates one by one on the Review page.",
+  '正确：橙色框盖住来球轨迹、篮圈和网下落球范围，白色虚线框只盖篮网':
+      "Right: the orange box covers the ball's path, the rim and where the ball lands; the white dashed box covers only the net",
+  '太大：别把整块篮板、球员和地面框进去':
+      "Too big: don't include the whole backboard, players or floor",
+  '太小：只框篮圈，球一靠近或落下就出框':
+      "Too small: a box on the rim alone loses the ball as soon as it comes near or drops",
   '框选示例': "Detection area examples",
   "先框投篮分析区（橙色）": "First: shot analysis area (orange)",
   "再框篮网检测区（白色）": "Next: net detection area (white)",
@@ -1428,25 +1526,34 @@ const _englishText = <String, String>{
   "投篮分析区（橙色）": "Shot analysis area (orange)",
   "篮网检测区（白色）": "Net detection area (white)",
   '看示例': "See examples",
-  '橙色区域用来跟踪球：从球进入篮圈上方，到落出篮网下方。白色区域只盖篮网摆动范围，用来判断球有没有穿网。系统会先自动识别，不准再拖动或缩放。': "The orange area tracks the ball from above the rim to below the net. The white area covers only the net's swing and is used to tell whether the ball went through. The app detects the hoop first; drag or resize only if it is off.",
+  '橙色区域用来跟踪球：从球进入篮圈上方，到落出篮网下方。白色区域只盖篮网摆动范围，用来判断球有没有穿网。系统会先自动识别，不准再拖动或缩放。':
+      "The orange area tracks the ball from above the rim to below the net. The white area covers only the net's swing and is used to tell whether the ball went through. The app detects the hoop first; drag or resize only if it is off.",
   '全部 / 保留 / 排除': "All / Kept / Excluded",
-  '「全部」是系统找到的所有候选；「保留」是还没被排除的（包括你点了保留的和还没审核的）；「排除」是你打了叉的。\n推荐：看完一遍后点「保留」再过一遍，这里的就是最终会导出的；还可以在「保留」里接着按球员标签、篮筐检测结果筛选，挑出要重点检查的。': "\"All\" is every candidate the app found; \"Kept\" is everything not excluded (candidates you kept plus ones you have not reviewed yet); \"Excluded\" is what you crossed out.\nTip: after one pass, open \"Kept\" and review it again - that is exactly what gets exported. Inside \"Kept\" you can keep filtering by player tag or rim check result to focus your checks.",
-  '想把所有片段统一加长或缩短，点这个按钮，设置每个进球「前」「后」各留几秒。只作用于当前列表里的候选（会随上面的筛选变化），默认不覆盖你手动调整过的片段。': "To lengthen or shorten every clip at once, click this and set how many seconds to keep before and after each goal. It applies only to the candidates in the current list (it follows the filters above) and by default does not overwrite clips you adjusted by hand.",
+  '「全部」是系统找到的所有候选；「保留」是还没被排除的（包括你点了保留的和还没审核的）；「排除」是你打了叉的。\n推荐：看完一遍后点「保留」再过一遍，这里的就是最终会导出的；还可以在「保留」里接着按球员标签、篮筐检测结果筛选，挑出要重点检查的。':
+      "\"All\" is every candidate the app found; \"Kept\" is everything not excluded (candidates you kept plus ones you have not reviewed yet); \"Excluded\" is what you crossed out.\nTip: after one pass, open \"Kept\" and review it again - that is exactly what gets exported. Inside \"Kept\" you can keep filtering by player tag or rim check result to focus your checks.",
+  '想把所有片段统一加长或缩短，点这个按钮，设置每个进球「前」「后」各留几秒。只作用于当前列表里的候选（会随上面的筛选变化），默认不覆盖你手动调整过的片段。':
+      "To lengthen or shorten every clip at once, click this and set how many seconds to keep before and after each goal. It applies only to the candidates in the current list (it follows the filters above) and by default does not overwrite clips you adjusted by hand.",
   '补漏：系统漏掉的进球': "Add missed goals",
-  '先切到「原视频」，播放到漏掉的进球附近，再点「补漏片段」：会以当前位置作为进球时刻新建一个候选，在弹出的窗口里用 I / O 或拖动定好开始和结束，点「加入候选」即可。': "Switch to \"Original\", play to near the missed goal, then click \"Add missed clip\": a new candidate is created with the current position as the goal moment. In the window, set start and end with I / O or by dragging, then click \"Add to candidates\".",
+  '先切到「原视频」，播放到漏掉的进球附近，再点「补漏片段」：会以当前位置作为进球时刻新建一个候选，在弹出的窗口里用 I / O 或拖动定好开始和结束，点「加入候选」即可。':
+      "Switch to \"Original\", play to near the missed goal, then click \"Add missed clip\": a new candidate is created with the current position as the goal moment. In the window, set start and end with I / O or by dragging, then click \"Add to candidates\".",
   '快捷键': "Shortcuts",
-  '分析队列已结束，有视频段没有分析成功，请在列表里查看': 'The analysis queue has finished, but some parts did not succeed - check the list',
+  '分析队列已结束，有视频段没有分析成功，请在列表里查看':
+      'The analysis queue has finished, but some parts did not succeed - check the list',
   '重新定位': 'Relink',
   '本页新手引导': 'Guide for this page',
   '重置新手引导': 'Reset onboarding guide',
-  '已重置，下次进入审核页和导出页会再次显示新手引导': 'Reset. The guide will show again next time you open Review and Export',
+  '已重置，下次进入审核页和导出页会再次显示新手引导':
+      'Reset. The guide will show again next time you open Review and Export',
   '这里看视频': 'Watch the clip here',
   '这里是找到的候选': 'Candidates found for you',
   '先选输出方式': 'Choose how to export',
-  '合并成一个视频，或每个片段单独导出；有球员标签时还能按标签各出一个。': 'Merge into one video, or export each clip separately; with player tags you can also get one video per tag.',
+  '合并成一个视频，或每个片段单独导出；有球员标签时还能按标签各出一个。':
+      'Merge into one video, or export each clip separately; with player tags you can also get one video per tag.',
   '点这里导出': 'Export from here',
-  '接着选保存位置，已排除的片段不会进入输出。导出在后台进行，期间可以回审核继续看；原视频不会被修改。': 'Next you pick where to save. Excluded clips are left out. Export runs in the background, so you can go back to Review; your original video is never changed.',
-  '视频画面准备较慢，已直接打开选择窗口': 'The video view was slow to get ready; opening the picker now',
+  '接着选保存位置，已排除的片段不会进入输出。导出在后台进行，期间可以回审核继续看；原视频不会被修改。':
+      'Next you pick where to save. Excluded clips are left out. Export runs in the background, so you can go back to Review; your original video is never changed.',
+  '视频画面准备较慢，已直接打开选择窗口':
+      'The video view was slow to get ready; opening the picker now',
   '导出任务未返回 id': 'The export task did not return an id',
   '检查视频输入': 'Check video input',
   '生成预览视频': 'Generate preview video',
@@ -1547,11 +1654,13 @@ const _englishText = <String, String>{
   '连不上更新服务器，请检查网络': 'Cannot reach the update server. Check your network.',
   '更新信息签名校验失败': 'The update information failed its signature check.',
   '更新信息格式无效': 'The update information is invalid.',
-  '下载中断，请检查网络后继续': 'The download was interrupted. Check your network and resume.',
+  '下载中断，请检查网络后继续':
+      'The download was interrupted. Check your network and resume.',
   '安装包校验失败，请重新下载': 'The package failed its checksum. Download it again.',
   '安装更新': 'Install update',
   '安装并重启': 'Install and restart',
-  '未能自动安装。可重试或打开所在文件夹手动更新。': 'Automatic installation failed. Retry or show the package in its folder to update manually.',
+  '未能自动安装。可重试或打开所在文件夹手动更新。':
+      'Automatic installation failed. Retry or show the package in its folder to update manually.',
   '正在准备更新，请稍候…': 'Preparing the update. Please wait…',
   '请等待当前操作结束后再安装更新':
       'Wait for the current operation to finish before installing the update.',
@@ -1593,10 +1702,38 @@ const _englishText = <String, String>{
       'Kept goals ÷ all suspected clips. Some suspected clips are not shots, and shots that never reach the rim are missing, so this is only a rough estimate.',
   '每人进球': 'Made shots per player',
   '进球时间分布': 'Made shots over time',
-  '源视频找不到，请到导入页重新定位视频': 'The source video cannot be found. Relink it on the import page.',
-  '视频横竖方向已修正，篮筐和候选需要重新确认并分析': 'The video orientation was corrected. Re-confirm the hoop and candidates, then analyse again.',
+  '源视频找不到，请到导入页重新定位视频':
+      'The source video cannot be found. Relink it on the import page.',
+  '视频横竖方向已修正，篮筐和候选需要重新确认并分析':
+      'The video orientation was corrected. Re-confirm the hoop and candidates, then analyse again.',
   '现在有分析或导出在进行，等它完成再安装，安装时 BHE 会被关闭。':
       'An analysis or export is running. Wait for it to finish; installing closes BHE.',
   '下载完成。安装时 BHE 会被关闭，项目会保留。第一次安装需要允许 BHE「安装未知应用」。':
       'Download complete. Installing closes BHE and keeps your projects. The first time, allow BHE to install unknown apps.',
+  '历史项目': 'Historical projects',
+  '可多选，按同名球员合并': 'Select multiple projects to merge matching player names',
+  '可把不同日期的同名球员一起导出；历史项目只读，不会被修改。':
+      'Export the same player from different dates together. Historical projects are read-only and will not be changed.',
+  '添加历史项目': 'Add historical project',
+  '封面与背景音乐': 'Cover and soundtrack',
+  '默认 3 秒封面、20% 音乐音量，可自定义':
+      '3-second cover and 20% music volume by default; fully customizable',
+  '添加人物封面': 'Add player cover',
+  '合并后的视频只添加一次封面': 'Add the cover only once to each merged video',
+  '封面样式': 'Cover style',
+  '球场': 'Court',
+  '海报': 'Poster',
+  '照片': 'Photo',
+  '强调色（HEX）': 'Accent color (HEX)',
+  '自定义标题（留空使用球员名）': 'Custom title (leave empty to use the player name)',
+  '自定义副标题': 'Custom subtitle',
+  '选择封面背景图': 'Choose cover background',
+  '清除背景图': 'Clear background image',
+  '添加运动背景音乐': 'Add sports background music',
+  '保留现场原声，背景音乐默认 20% 音量':
+      'Keep the original sound; background music defaults to 20% volume',
+  '音乐类型': 'Music type',
+  '选择本地音乐': 'Choose local music',
+  '清除本地音乐': 'Clear local music',
+  '可选历史项目': 'Optional historical projects',
 };
