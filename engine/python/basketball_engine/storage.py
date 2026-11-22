@@ -113,6 +113,32 @@ class ProjectStore:
             );
             CREATE INDEX IF NOT EXISTS idx_players_project_name
                 ON players(project_id, name);
+            CREATE TABLE IF NOT EXISTS player_identities (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                player_id TEXT REFERENCES players(id) ON DELETE SET NULL,
+                model_version TEXT NOT NULL,
+                prototype_json TEXT NOT NULL DEFAULT '{}',
+                sample_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_player_identities_project
+                ON player_identities(project_id, player_id);
+            CREATE TABLE IF NOT EXISTS candidate_player_assignments (
+                candidate_id TEXT PRIMARY KEY REFERENCES candidates(id) ON DELETE CASCADE,
+                identity_id TEXT NOT NULL REFERENCES player_identities(id) ON DELETE CASCADE,
+                player_id TEXT REFERENCES players(id) ON DELETE SET NULL,
+                assignment_source TEXT NOT NULL CHECK(assignment_source IN ('automatic','manual')),
+                touch_time_ms INTEGER,
+                touch_confidence REAL,
+                identity_confidence REAL,
+                evidence_json TEXT NOT NULL DEFAULT '{}',
+                algorithm_version TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_identity_assignments_identity
+                ON candidate_player_assignments(identity_id, assignment_source);
             """
         )
         video_columns = {
@@ -615,10 +641,14 @@ class ProjectStore:
                         THEN 'excluded' ELSE 'included' END AS selection_status,
                    r.reason AS review_reason, r.note, r.reviewed_at,
                    r.review_started_at, r.review_duration_ms,
-                   r.player_id, p.name AS player_name
+                   r.player_id, p.name AS player_name,
+                   a.identity_id, a.assignment_source, a.touch_time_ms,
+                   a.touch_confidence, a.identity_confidence,
+                   a.algorithm_version AS identity_algorithm_version
             FROM candidates c
             LEFT JOIN candidate_reviews r ON r.candidate_id = c.id
             LEFT JOIN players p ON p.id = r.player_id
+            LEFT JOIN candidate_player_assignments a ON a.candidate_id = c.id
             JOIN videos v ON v.id = c.video_id
         """
         params: Iterable[Any] = ()
@@ -628,6 +658,12 @@ class ProjectStore:
         query += " ORDER BY v.sort_index, v.created_at, c.event_time_ms"
         with self.connect() as connection:
             return [dict(row) for row in connection.execute(query, tuple(params)).fetchall()]
+
+    def candidate(self, candidate_id: str) -> Dict[str, Any] | None:
+        return next(
+            (candidate for candidate in self.list_candidates() if candidate["id"] == candidate_id),
+            None,
+        )
 
     def create_manual_candidate(
         self,
@@ -751,12 +787,23 @@ class ProjectStore:
                     (video_id,),
                 ).fetchall()
             }
+            existing_assignments = {
+                row["candidate_id"]: dict(row)
+                for row in connection.execute(
+                    "SELECT * FROM candidate_player_assignments "
+                    "WHERE candidate_id IN (SELECT id FROM candidates WHERE video_id = ?)",
+                    (video_id,),
+                ).fetchall()
+            }
             matches: dict[str, dict[str, Any]] = {}
+            matched_old: dict[str, str] = {}
             used_old: set[str] = set()
             for row in rows:
                 candidate_id = str(row["id"])
                 review = existing_reviews.get(candidate_id)
                 old_candidate = existing_candidates.get(candidate_id)
+                if old_candidate is not None:
+                    matched_old[candidate_id] = candidate_id
                 if review is not None and old_candidate is not None:
                     # An exact ID match consumes the old review so a second
                     # nearby new candidate cannot inherit it as well.
@@ -777,6 +824,7 @@ class ProjectStore:
                     ):
                         _, old_id, old_candidate = candidates[0]
                         review = existing_reviews[old_id]
+                        matched_old[candidate_id] = old_id
                         used_old.add(old_id)
                 if old_candidate is not None:
                     event_delta = int(row["event_time_ms"]) - int(old_candidate["event_time_ms"])
@@ -855,8 +903,248 @@ class ProjectStore:
                         timestamp,
                     ),
                 )
+                assignment = existing_assignments.get(matched_old.get(str(row["id"])))
+                if assignment is not None:
+                    connection.execute(
+                        """
+                        INSERT INTO candidate_player_assignments (
+                            candidate_id, identity_id, player_id, assignment_source,
+                            touch_time_ms, touch_confidence, identity_confidence,
+                            evidence_json, algorithm_version, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            row["id"],
+                            assignment["identity_id"],
+                            review["player_id"] if review else assignment["player_id"],
+                            assignment["assignment_source"],
+                            assignment["touch_time_ms"],
+                            assignment["touch_confidence"],
+                            assignment["identity_confidence"],
+                            assignment["evidence_json"],
+                            assignment["algorithm_version"],
+                            timestamp,
+                        ),
+                    )
             if before_commit is not None:
                 before_commit()
+
+    def create_identity(
+        self,
+        identity_id: str | None = None,
+        *,
+        prototype: Dict[str, Any] | None = None,
+        sample_count: int = 0,
+        model_version: str = "local-appearance-v1",
+    ) -> Dict[str, Any]:
+        project = self.project()
+        if not project:
+            raise ValueError("PROJECT_NOT_INITIALIZED")
+        if sample_count < 0:
+            raise ValueError("INVALID_IDENTITY_SAMPLE_COUNT")
+        timestamp = now_iso()
+        row = {
+            "id": identity_id or new_id("identity"),
+            "project_id": project["id"],
+            "player_id": None,
+            "model_version": model_version,
+            "prototype_json": json.dumps(prototype or {}, ensure_ascii=False, sort_keys=True),
+            "sample_count": int(sample_count),
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        }
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO player_identities (
+                    id, project_id, player_id, model_version, prototype_json,
+                    sample_count, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                tuple(row.values()),
+            )
+        return row
+
+    def list_identities(self) -> list[Dict[str, Any]]:
+        project = self.project()
+        if not project:
+            raise ValueError("PROJECT_NOT_INITIALIZED")
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT i.*, p.name AS player_name, COUNT(a.candidate_id) AS candidate_count
+                FROM player_identities i
+                LEFT JOIN players p ON p.id = i.player_id
+                LEFT JOIN candidate_player_assignments a ON a.identity_id = i.id
+                WHERE i.project_id = ?
+                GROUP BY i.id
+                ORDER BY i.created_at, i.id
+                """,
+                (project["id"],),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_identity_assignment(
+        self,
+        candidate_id: str,
+        identity_id: str,
+        touch_evidence: Dict[str, Any],
+        identity_confidence: float,
+        *,
+        algorithm_version: str = "last-touch-v1",
+    ) -> Dict[str, Any]:
+        confidence = float(identity_confidence)
+        if not 0 <= confidence <= 1:
+            raise ValueError("INVALID_IDENTITY_CONFIDENCE")
+        with self.connect() as connection:
+            candidate = connection.execute(
+                "SELECT v.project_id FROM candidates c JOIN videos v ON v.id = c.video_id WHERE c.id = ?",
+                (candidate_id,),
+            ).fetchone()
+            if not candidate:
+                raise LookupError("CANDIDATE_NOT_FOUND")
+            identity = connection.execute(
+                "SELECT * FROM player_identities WHERE id = ? AND project_id = ?",
+                (identity_id, candidate["project_id"]),
+            ).fetchone()
+            if not identity:
+                raise LookupError("IDENTITY_NOT_FOUND")
+            existing = connection.execute(
+                "SELECT assignment_source FROM candidate_player_assignments WHERE candidate_id = ?",
+                (candidate_id,),
+            ).fetchone()
+            if existing and existing["assignment_source"] == "manual":
+                return dict(self.candidate(candidate_id))
+            timestamp = now_iso()
+            touch_time_ms = touch_evidence.get("touch_time_ms")
+            connection.execute(
+                """
+                INSERT INTO candidate_player_assignments (
+                    candidate_id, identity_id, player_id, assignment_source,
+                    touch_time_ms, touch_confidence, identity_confidence,
+                    evidence_json, algorithm_version, updated_at
+                ) VALUES (?, ?, ?, 'automatic', ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(candidate_id) DO UPDATE SET
+                    identity_id = excluded.identity_id,
+                    player_id = excluded.player_id,
+                    assignment_source = 'automatic',
+                    touch_time_ms = excluded.touch_time_ms,
+                    touch_confidence = excluded.touch_confidence,
+                    identity_confidence = excluded.identity_confidence,
+                    evidence_json = excluded.evidence_json,
+                    algorithm_version = excluded.algorithm_version,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    candidate_id,
+                    identity_id,
+                    identity["player_id"],
+                    int(touch_time_ms) if touch_time_ms is not None else None,
+                    touch_evidence.get("confidence"),
+                    confidence,
+                    json.dumps(touch_evidence, ensure_ascii=False, sort_keys=True),
+                    algorithm_version,
+                    timestamp,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO candidate_reviews (candidate_id, player_id, status, updated_at)
+                VALUES (?, ?, 'pending', ?)
+                ON CONFLICT(candidate_id) DO UPDATE SET
+                    player_id = excluded.player_id,
+                    updated_at = excluded.updated_at
+                """,
+                (candidate_id, identity["player_id"], timestamp),
+            )
+        return dict(self.candidate(candidate_id))
+
+    def name_identity(
+        self,
+        identity_id: str,
+        player_name: str | None = None,
+        *,
+        player_id: str | None = None,
+    ) -> Dict[str, Any]:
+        if (player_name is None) == (player_id is None):
+            raise ValueError("IDENTITY_PLAYER_REQUIRED")
+        if player_name is not None and not isinstance(player_name, str):
+            raise ValueError("PLAYER_NAME_INVALID")
+        project = self.project()
+        if not project:
+            raise ValueError("PROJECT_NOT_INITIALIZED")
+        with self.connect() as connection:
+            identity = connection.execute(
+                "SELECT * FROM player_identities WHERE id = ? AND project_id = ?",
+                (identity_id, project["id"]),
+            ).fetchone()
+            if not identity:
+                raise LookupError("IDENTITY_NOT_FOUND")
+            timestamp = now_iso()
+            if player_id is not None:
+                player = connection.execute(
+                    "SELECT * FROM players WHERE id = ? AND project_id = ?",
+                    (player_id, project["id"]),
+                ).fetchone()
+                if not player:
+                    raise LookupError("PLAYER_NOT_FOUND")
+            else:
+                normalized = player_name.strip()
+                if not normalized:
+                    raise ValueError("PLAYER_NAME_INVALID")
+                player = connection.execute(
+                    "SELECT * FROM players WHERE project_id = ? AND name = ?",
+                    (project["id"], normalized),
+                ).fetchone()
+                if player is None:
+                    player_id = new_id("player")
+                    connection.execute(
+                        "INSERT INTO players (id, project_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                        (player_id, project["id"], normalized, timestamp, timestamp),
+                    )
+                    player = connection.execute(
+                        "SELECT * FROM players WHERE id = ?", (player_id,),
+                    ).fetchone()
+            connection.execute(
+                "UPDATE player_identities SET player_id = ?, updated_at = ? WHERE id = ?",
+                (player["id"], timestamp, identity_id),
+            )
+            candidate_ids = [
+                row["candidate_id"]
+                for row in connection.execute(
+                    """
+                    SELECT candidate_id FROM candidate_player_assignments
+                    WHERE identity_id = ? AND assignment_source = 'automatic'
+                    """,
+                    (identity_id,),
+                ).fetchall()
+            ]
+            for candidate_id in candidate_ids:
+                connection.execute(
+                    """
+                    INSERT INTO candidate_reviews (candidate_id, player_id, status, updated_at)
+                    VALUES (?, ?, 'pending', ?)
+                    ON CONFLICT(candidate_id) DO UPDATE SET
+                        player_id = excluded.player_id,
+                        updated_at = excluded.updated_at
+                    """,
+                    (candidate_id, player["id"], timestamp),
+                )
+            connection.execute(
+                """
+                UPDATE candidate_player_assignments SET player_id = ?, updated_at = ?
+                WHERE identity_id = ? AND assignment_source = 'automatic'
+                """,
+                (player["id"], timestamp, identity_id),
+            )
+            updated_identity = connection.execute(
+                "SELECT * FROM player_identities WHERE id = ?", (identity_id,),
+            ).fetchone()
+        return {
+            "player": dict(player),
+            "identity": dict(updated_identity),
+            "updated_candidates": len(candidate_ids),
+        }
 
     def list_players(self) -> list[Dict[str, Any]]:
         project = self.project()
@@ -917,6 +1205,7 @@ class ProjectStore:
                 ).fetchone()
                 if not player:
                     raise LookupError("PLAYER_NOT_FOUND")
+            timestamp = now_iso()
             connection.execute(
                 """
                 INSERT INTO candidate_reviews (candidate_id, player_id, status, updated_at)
@@ -925,7 +1214,15 @@ class ProjectStore:
                     player_id = excluded.player_id,
                     updated_at = excluded.updated_at
                 """,
-                (candidate_id, player_id, now_iso()),
+                (candidate_id, player_id, timestamp),
+            )
+            connection.execute(
+                """
+                UPDATE candidate_player_assignments
+                SET assignment_source = 'manual', player_id = ?, updated_at = ?
+                WHERE candidate_id = ?
+                """,
+                (player_id, timestamp, candidate_id),
             )
 
     def set_candidates_player(self, candidate_ids: list[str], player_id: str | None) -> int:
@@ -960,6 +1257,14 @@ class ProjectStore:
                         updated_at = excluded.updated_at
                     """,
                     (candidate_id, player_id, timestamp),
+                )
+                connection.execute(
+                    """
+                    UPDATE candidate_player_assignments
+                    SET assignment_source = 'manual', player_id = ?, updated_at = ?
+                    WHERE candidate_id = ?
+                    """,
+                    (player_id, timestamp, candidate_id),
                 )
         return len(set(candidate_ids))
 

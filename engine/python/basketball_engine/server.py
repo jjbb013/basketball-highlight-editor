@@ -67,7 +67,7 @@ def main() -> int:
         "create_project", "delete_project", "start_analysis", "start_export",
         "reorder_videos", "set_analysis_queue", "set_analysis_range",
         "save_roi", "start_review", "review_candidate", "set_candidates_player",
-        "set_candidate_player", "delete_player",
+        "set_candidate_player", "delete_player", "name_identity",
         "update_clip_range", "update_clip_ranges", "create_manual_candidate",
         "retry_analysis", "retry_export", "update_project_settings",
         "set_analysis_mode", "save_workflow_draft", "clear_workflow_draft",

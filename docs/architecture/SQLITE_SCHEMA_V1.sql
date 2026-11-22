@@ -113,6 +113,36 @@ CREATE TABLE IF NOT EXISTS players (
 CREATE INDEX IF NOT EXISTS idx_players_project_name
     ON players(project_id, name);
 
+CREATE TABLE IF NOT EXISTS player_identities (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    player_id TEXT REFERENCES players(id) ON DELETE SET NULL,
+    model_version TEXT NOT NULL,
+    prototype_json TEXT NOT NULL DEFAULT '{}',
+    sample_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_identities_project
+    ON player_identities(project_id, player_id);
+
+CREATE TABLE IF NOT EXISTS candidate_player_assignments (
+    candidate_id TEXT PRIMARY KEY REFERENCES candidates(id) ON DELETE CASCADE,
+    identity_id TEXT NOT NULL REFERENCES player_identities(id) ON DELETE CASCADE,
+    player_id TEXT REFERENCES players(id) ON DELETE SET NULL,
+    assignment_source TEXT NOT NULL CHECK(assignment_source IN ('automatic','manual')),
+    touch_time_ms INTEGER,
+    touch_confidence REAL,
+    identity_confidence REAL,
+    evidence_json TEXT NOT NULL DEFAULT '{}',
+    algorithm_version TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_identity_assignments_identity
+    ON candidate_player_assignments(identity_id, assignment_source);
+
 CREATE TABLE IF NOT EXISTS exports (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

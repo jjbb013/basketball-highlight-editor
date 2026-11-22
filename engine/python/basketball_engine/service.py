@@ -142,6 +142,7 @@ class EngineService:
             "create_manual_candidate": self.create_manual_candidate,
             "list_players": self.list_players,
             "create_player": self.create_player,
+            "name_identity": self.name_identity,
             "delete_player": self.delete_player,
             "set_candidate_player": self.set_candidate_player,
             "set_candidates_player": self.set_candidates_player,
@@ -2405,6 +2406,25 @@ class EngineService:
         except ValueError as exc:
             raise ProtocolError("INVALID_REQUEST", str(exc)) from exc
         return {"player": player}
+
+    def name_identity(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        identity_id = payload.get("identity_id")
+        player_name = payload.get("player_name")
+        player_id = payload.get("player_id")
+        if not isinstance(identity_id, str) or not identity_id:
+            raise ProtocolError("INVALID_REQUEST", "缺少 identity_id")
+        if player_name is not None and not isinstance(player_name, str):
+            raise ProtocolError("INVALID_REQUEST", "player_name 必须是字符串")
+        if player_id is not None and (not isinstance(player_id, str) or not player_id):
+            raise ProtocolError("INVALID_REQUEST", "player_id 必须是非空字符串")
+        try:
+            return self._require_store(payload).name_identity(
+                identity_id,
+                player_name,
+                player_id=player_id,
+            )
+        except (ValueError, LookupError) as exc:
+            raise ProtocolError("INVALID_REQUEST", str(exc)) from exc
 
     def delete_player(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         player_id = payload.get("player_id")
