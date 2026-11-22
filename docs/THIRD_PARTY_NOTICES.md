@@ -16,6 +16,9 @@
 | FFmpeg / FFprobe | 元数据、代理、预览和导出 | 系统或发布运行时 | 核对构建配置、LGPL/GPL 边界和 notices |
 | `media_kit` / `video_player` | 桌面/移动视频播放 | `apps/*/pubspec.yaml` | 保留对应包和插件 notices |
 | Inter 字体 | 桌面 UI 字体（如重新加入） | `apps/desktop/assets` | 核对字体文件和许可证 |
+| Pillow | 本地封面渲染与人物外观特征 | `requirements.txt` | 保留其许可证并核验发布版本 |
+| Noto Sans SC | 导出封面的中文与拉丁字体 | `assets/fonts/SOURCE.md` 记录的固定文件哈希 | 随发布物保留 `assets/fonts/OFL.txt` |
+| 内置运动 BGM | 电子、嘻哈、摇滚循环 | `scripts/generate_sports_bgm.py` 确定性生成 | 不含第三方录音或采样；保留生成脚本与说明 |
 
 具体版本应以提交时的 lockfile、构建产物和发布清单为准，不要只复制这张表。
 

@@ -56,6 +56,7 @@ cp -R "$PYTHON_RUNTIME"/. "$OUT/python/"
 cp -R "$ROOT/engine/python" "$OUT/engine/"
 cp -R "$ROOT/scripts"/. "$OUT/scripts/"
 cp -R "$ROOT/src"/. "$OUT/src/"
+cp -R "$ROOT/assets" "$OUT/assets/"
 cp "$ROOT/docs/architecture/SQLITE_SCHEMA_V1.sql" "$OUT/docs/architecture/"
 cp "$MODEL" "$OUT/models/bball_model.pt"
 # CoreML 用的静态 batch=1 模型是可选的:构建时导出过就一起打包,
