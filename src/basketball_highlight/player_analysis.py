@@ -13,7 +13,7 @@ from .appearance import appearance_distance, appearance_vector
 from .identity_model import LocalIdentityModel
 from .last_touch import select_last_touch
 
-ALGORITHM_VERSION = "yolo-pose-last-touch-local-appearance-v1"
+ALGORITHM_VERSION = "yolo-pose-last-touch-local-appearance-v3"
 MAX_TRACK_GAP_MS = 350
 
 
@@ -191,7 +191,11 @@ def analyze_player_event(
         identity = identity_model.assign(features)
         if identity["identity_id"] is not None:
             identity_model.observe(identity["identity_id"], features)
-    needs_review = touch["status"] != "identified" or identity["needs_review"]
+    needs_review = (
+        touch["status"] != "identified"
+        or touch.get("needs_review", False)
+        or identity["needs_review"]
+    )
     return {
         "event_time_ms": event_time_ms,
         "status": "review" if needs_review else "identified",

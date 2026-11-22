@@ -84,3 +84,50 @@ def test_no_person_is_an_explicit_review_not_an_exception():
         "confidence": 0.0,
         "alternatives": [],
     }
+
+
+def test_short_bracketed_detection_gap_preserves_final_contact_for_review():
+    frames = [
+        frame(1000, "shooter", 100, 100),
+        frame(1067, "shooter", 100, 100),
+        dict(frame(1133, "shooter", 100, 100), ball=None),
+        dict(frame(1200, "shooter", 100, 100), ball=None),
+        frame(1267, "shooter", 100, 100),
+        frame(1333, "shooter", 100, 158),
+        dict(frame(1400, "shooter", 100, 100), ball=None),
+        frame(1533, "shooter", 100, 200),
+    ]
+    result = select_last_touch(frames)
+    assert result["status"] == "identified"
+    assert result["local_track_id"] == "shooter"
+    assert result["touch_time_ms"] == 1267
+    assert result["release_time_ms"] == 1533
+    assert result["bridged_detection_gap"] is True
+    assert result["needs_review"] is True
+
+
+def test_leading_occlusion_does_not_count_as_contact_support():
+    frames = [
+        dict(frame(1000, "shooter", 100, 100), ball=None),
+        dict(frame(1067, "shooter", 100, 100), ball=None),
+        frame(1267, "shooter", 100, 100),
+        frame(1333, "shooter", 100, 158),
+        dict(frame(1400, "shooter", 100, 100), ball=None),
+        frame(1533, "shooter", 100, 200),
+    ]
+    assert select_last_touch(frames)["status"] == "review"
+
+
+def test_detection_gap_beyond_two_frames_does_not_bridge_contact():
+    frames = [
+        frame(1000, "shooter", 100, 100),
+        frame(1067, "shooter", 100, 100),
+        dict(frame(1133, "shooter", 100, 100), ball=None),
+        dict(frame(1200, "shooter", 100, 100), ball=None),
+        dict(frame(1267, "shooter", 100, 100), ball=None),
+        frame(1333, "shooter", 100, 100),
+        frame(1400, "shooter", 100, 158),
+        dict(frame(1467, "shooter", 100, 100), ball=None),
+        frame(1600, "shooter", 100, 200),
+    ]
+    assert select_last_touch(frames)["status"] == "review"

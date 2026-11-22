@@ -59,8 +59,16 @@ def evaluate_identity_predictions(
         result = results.get(candidate_id) or {}
         touch = result.get('touch') or {}
         identity = result.get('identity') or {}
-        touch_automatic = touch.get('status') == 'identified' and bool(touch.get('local_track_id'))
-        identity_automatic = bool(identity.get('identity_id')) and not identity.get('needs_review', True)
+        touch_automatic = (
+            touch.get('status') == 'identified'
+            and bool(touch.get('local_track_id'))
+            and not touch.get('needs_review', False)
+        )
+        identity_automatic = (
+            bool(identity.get('identity_id'))
+            and not identity.get('needs_review', True)
+            and not result.get('needs_review', True)
+        )
         correct_touch = touch_eligible and touch_automatic and touch['local_track_id'] == truth_track
         correct_identity = identity_eligible and identity_automatic and aliases.get(
             identity['identity_id'], identity['identity_id'],

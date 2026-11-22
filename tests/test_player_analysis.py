@@ -77,6 +77,24 @@ def test_different_clothing_creates_a_second_reviewable_identity_not_a_name_gues
     assert len(second["model"]["prototypes"]) == 2
 
 
+def test_short_ball_detection_gap_creates_reviewable_identity_not_auto_match():
+    model = LocalIdentityModel()
+    first = analyze_player_event(shot_frames(), 600, model)
+    gapped = [
+        shot_frames()[0],
+        dict(shot_frames()[1], time_ms=67, ball=None),
+        dict(shot_frames()[1], time_ms=133, ball=None),
+        *shot_frames()[2:],
+    ]
+    second = analyze_player_event(gapped, 600, model)
+    assert second["touch"]["status"] == "identified"
+    assert second["touch"]["needs_review"] is True
+    assert second["identity"]["identity_id"] == first["identity"]["identity_id"]
+    assert second["identity"]["needs_review"] is False
+    assert second["needs_review"] is True
+    assert second["appearance_samples"] > 0
+
+
 def test_no_release_evidence_or_no_appearance_never_becomes_an_automatic_identity():
     no_touch = analyze_player_event([], 600, LocalIdentityModel())
     assert no_touch["touch"]["status"] == "review"

@@ -37,6 +37,32 @@ def test_metrics_separate_touch_identity_joint_coverage_and_review_cost():
     assert report['records'][1]['identity_correct'] is False
 
 
+def test_touch_level_review_does_not_count_as_automatic_coverage():
+    result = prediction('t1', 'opaque-1')
+    result['touch']['needs_review'] = True
+    report = evaluate_identity_predictions(
+        [{'candidate_id': 'a', 'basket': 'made', 'truth_local_track_id': 't1',
+          'truth_identity_id': 'person-a', 'review_cost_seconds': 0}],
+        {'results': {'a': result}},
+    )
+    assert report['last_touch']['top1'] == 0.0
+    assert report['last_touch']['automatic_coverage'] == 0.0
+
+
+def test_touch_review_does_not_count_as_automatic_identity_coverage():
+    result = prediction('t1', 'opaque-1', review=True)
+    result['touch']['needs_review'] = True
+    result['identity']['needs_review'] = False
+    report = evaluate_identity_predictions(
+        [{'candidate_id': 'a', 'basket': 'made', 'truth_local_track_id': 't1',
+          'truth_identity_id': 'person-a', 'review_cost_seconds': 0}],
+        {'results': {'a': result}}, {'opaque-1': 'person-a'},
+    )
+    assert report['identity']['top1'] == 0.0
+    assert report['identity']['automatic_coverage'] == 0.0
+    assert report['review']['automatic'] == 1
+
+
 def test_missing_predictions_and_truth_are_not_counted_as_correct():
     report = evaluate_identity_predictions(
         [{'candidate_id': 'a', 'basket': 'made', 'truth_local_track_id': None,

@@ -60,9 +60,27 @@ class LocalIdentityModel:
         distance, weight, identity_id = scored[0]
         second_distance = scored[1][0] if len(scored) > 1 else None
         alternatives = [item[2] for item in scored[:3]]
+        prototype_features = self.prototypes[identity_id]["features"]
+        clothing_conflict = False
+        for name in ("shirt", "pants", "shoes"):
+            if name not in features or name not in prototype_features:
+                continue
+            current_region = features[name]
+            prototype_region = prototype_features[name]
+            if min(current_region["quality"], prototype_region["quality"]) < 0.25:
+                continue
+            region_distance, _ = appearance_distance(
+                {name: current_region}, {name: prototype_region},
+            )
+            if region_distance is not None and region_distance > self.threshold / 2:
+                clothing_conflict = True
+                break
         if second_distance is not None and second_distance - distance < self.margin:
             return _result(None, 0.0, True, second_distance, alternatives)
         if distance <= self.threshold:
+            if clothing_conflict:
+                # A weighted average must not hide reliable clothing disagreement.
+                return _result(None, 0.0, True, second_distance, alternatives)
             confidence = (1.0 - distance / self.threshold) * min(1.0, weight)
             return _result(identity_id, confidence, False, second_distance, alternatives)
         if distance > self.threshold + self.margin:

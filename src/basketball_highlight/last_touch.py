@@ -9,6 +9,9 @@ CONTACT_DISTANCE = 0.25
 RELEASE_DISTANCE = 0.35
 MIN_WRIST_CONFIDENCE = 0.5
 MAX_FRAME_GAP_MS = 450
+# Bridge at most two missing 15 fps detections only between measured contacts.
+# Such a candidate remains reviewable; never extrapolate beyond either endpoint.
+MAX_CONTACT_SUPPORT_GAP_MS = 200
 
 
 def _wrist_distance(person: Mapping[str, Any], ball: Sequence[float]) -> float | None:
@@ -43,13 +46,25 @@ def _track_candidates(frames: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
         if distance is None or distance > CONTACT_DISTANCE:
             continue
         start = end
-        while (
-            start > 0
-            and observations[start - 1]["distance"] is not None
-            and observations[start - 1]["distance"] <= CONTACT_DISTANCE
-            and contact["time_ms"] - observations[start - 1]["time_ms"] <= MAX_FRAME_GAP_MS
-        ):
-            start -= 1
+        bridged_detection_gap = False
+        while start > 0:
+            previous_index = start - 1
+            while (
+                previous_index > 0
+                and observations[previous_index]["distance"] is None
+            ):
+                previous_index -= 1
+            previous = observations[previous_index]
+            support_gap_ms = observations[start]["time_ms"] - previous["time_ms"]
+            if (
+                previous["distance"] is None
+                or previous["distance"] > CONTACT_DISTANCE
+                or support_gap_ms > MAX_CONTACT_SUPPORT_GAP_MS
+                or contact["time_ms"] - previous["time_ms"] > MAX_FRAME_GAP_MS
+            ):
+                break
+            bridged_detection_gap |= previous_index != start - 1
+            start = previous_index
         duration_ms = contact["time_ms"] - observations[start]["time_ms"]
         if duration_ms < 50:
             continue
@@ -76,6 +91,7 @@ def _track_candidates(frames: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
             "confidence": round(0.5 * proximity + 0.3 * release_strength + 0.2 * duration_support, 6),
             "contact_start_ms": observations[start]["time_ms"],
             "release_time_ms": release["time_ms"],
+            "bridged_detection_gap": bridged_detection_gap,
         })
     return candidates
 
@@ -128,5 +144,7 @@ def select_last_touch(
         "confidence": winner["confidence"],
         "contact_start_ms": winner["contact_start_ms"],
         "release_time_ms": winner["release_time_ms"],
+        "bridged_detection_gap": winner["bridged_detection_gap"],
+        "needs_review": winner["bridged_detection_gap"],
         "alternatives": candidates[1:],
     }

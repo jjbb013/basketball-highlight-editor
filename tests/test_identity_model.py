@@ -52,6 +52,24 @@ def test_distinct_clothing_creates_another_identity():
     assert result["new_identity"]
 
 
+def test_conflicting_shirt_cannot_be_hidden_by_other_matching_regions():
+    model = LocalIdentityModel()
+    regions = {name: (1.0, 0.0, 0.0) for name in
+               ('hair', 'face', 'skin', 'shirt', 'pants', 'shoes')}
+    first = model.assign(appearance_vector(regions, {name: 1.0 for name in regions}))
+    assert first['identity_id'] is not None
+    model.observe(first['identity_id'], appearance_vector(
+        regions, {name: 1.0 for name in regions},
+    ))
+    conflicting = dict(regions, shirt=(0.8, 0.6, 0.0))
+
+    result = model.assign(appearance_vector(conflicting, {name: 1.0 for name in regions}))
+
+    assert result['needs_review']
+    assert result['identity_id'] is None
+    assert result['alternative_identity_ids'] == [first['identity_id']]
+
+
 def test_two_close_identities_require_review():
     model = LocalIdentityModel()
     first = add_identity(model, 0.9)
