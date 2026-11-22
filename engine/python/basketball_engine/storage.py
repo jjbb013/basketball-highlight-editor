@@ -182,6 +182,70 @@ class ProjectStore:
         self._ensure_schema_compatibility(connection)
         return connection
 
+    def connect_read_only(self) -> sqlite3.Connection:
+        """Open a historical project without schema migrations or WAL writes."""
+        connection = sqlite3.connect(
+            self.db_path.as_uri() + '?mode=ro', uri=True, timeout=30.0,
+            factory=_ClosingConnection,
+        )
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 30000")
+        connection.execute("PRAGMA query_only = ON")
+        return connection
+
+    @staticmethod
+    def _database_identity(stat) -> list[int]:
+        return [stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns]
+
+    def read_export_snapshot(self) -> Dict[str, Any]:
+        """Read one consistent, JSON-safe snapshot of an external project."""
+        before = self._database_identity(self.db_path.stat())
+        try:
+            with self.connect_read_only() as connection:
+                connection.execute("BEGIN")
+                project_row = connection.execute("SELECT * FROM projects LIMIT 1").fetchone()
+                if project_row is None:
+                    raise LookupError("PROJECT_NOT_FOUND")
+                videos = [
+                    dict(row) for row in connection.execute(
+                        "SELECT * FROM videos ORDER BY sort_index, created_at"
+                    ).fetchall()
+                ]
+                candidates = [
+                    dict(row) for row in connection.execute(
+                        """
+                        SELECT c.*, COALESCE(r.status, 'pending') AS review_status,
+                               CASE WHEN COALESCE(r.status, 'pending') = 'excluded'
+                                    THEN 'excluded' ELSE 'included' END AS selection_status,
+                               r.player_id, p.name AS player_name
+                        FROM candidates c
+                        LEFT JOIN candidate_reviews r ON r.candidate_id = c.id
+                        LEFT JOIN players p ON p.id = r.player_id
+                        JOIN videos v ON v.id = c.video_id
+                        ORDER BY v.sort_index, v.created_at, c.event_time_ms
+                        """
+                    ).fetchall()
+                ]
+                rois = {}
+                for row in connection.execute("SELECT * FROM rois WHERE is_active = 1").fetchall():
+                    roi = dict(row)
+                    roi["calibration"] = json.loads(roi.pop("calibration_json") or "{}")
+                    rois[roi["video_id"]] = roi
+        except sqlite3.Error as exc:
+            raise ValueError("PROJECT_INVALID") from exc
+        after = self._database_identity(self.db_path.stat())
+        if before != after:
+            raise ValueError("PROJECT_CHANGED")
+        return {
+            "project": dict(project_row),
+            "project_root": str(self.root),
+            "database_identity": after,
+            "videos": videos,
+            "candidates": candidates,
+            "rois": rois,
+        }
+
     def create_project(self, project_id: str, name: str, language: str = "zh-CN") -> Dict[str, Any]:
         timestamp = now_iso()
         with self.connect() as connection:

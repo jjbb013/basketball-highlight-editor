@@ -45,6 +45,7 @@ from .adapters.export import (
 )
 from .adapters.hdr import color_plan, hdr_filter_available, HDR_UNKNOWN, TONEMAP_FILTER
 from .adapters.presentation import enhance_video, normalize_presentation
+from .adapters.project_sources import group_player_candidates, normalized_player_name
 from .adapters.runtime_preflight import DetectorPreflight, runtime_error
 from basketball_highlight.runtime_errors import is_runtime_failure
 from .protocol import ProtocolError
@@ -1476,7 +1477,7 @@ class EngineService:
             retry_payload["output_dir"] = checkpoint["output_dir"]
         if checkpoint.get("output_path") is not None:
             retry_payload["output_path"] = checkpoint["output_path"]
-        for key in ("player_ids", "include_unassigned", "effect", "presentation"):
+        for key in ("player_ids", "include_unassigned", "effect", "presentation", "source_projects"):
             if key in checkpoint:
                 retry_payload[key] = checkpoint[key]
         # Check what start_export would reject before ending the old job, so a
@@ -2655,6 +2656,7 @@ class EngineService:
                 for key, video in videos.items():
                     self._validated_source(video)
                     self._check_source_identity(video["source"], source_identities[key])
+                self._check_external_project_identities(candidates)
                 if project_identity is not None:
                     self._check_project_identity(store, project_identity)
             except (ProtocolError, PipelineCancelled):
@@ -2738,6 +2740,7 @@ class EngineService:
                         self._check_project_identity(store, project_identity)
                         for key, video in videos.items():
                             self._check_source_identity(video["source"], source_identities[key])
+                        self._check_external_project_identities(candidates)
                         export = publish()
             except Exception:
                 for path in {*result.get("files", []), *result.get("clip_files", [])}:
@@ -2821,9 +2824,7 @@ class EngineService:
         effect: str = "none",
     ) -> Dict[str, Any]:
         """每个标签各合成一个视频，文件名用标签名；中间片段放在项目缓存里。"""
-        groups: Dict[str, list[Dict[str, Any]]] = {}
-        for candidate in candidates:
-            groups.setdefault(str(candidate.get("player_name") or ""), []).append(candidate)
+        groups = group_player_candidates(candidates)
         work_root = store.root / "artifacts" / "exports" / f"by_player_{int(time.time() * 1000)}"
         output_dir.mkdir(parents=True, exist_ok=True)
         files: list[str] = []
@@ -2835,7 +2836,8 @@ class EngineService:
         sizes = [len(merge_overlapping_candidates(group)) if effect == "none" else len(group) for group in groups.values()]
         done = 0
         try:
-            for index, (name, group) in enumerate(groups.items()):
+            for index, (_, group) in enumerate(groups.items()):
+                name = normalized_player_name(group[0].get("player_name")) or "未标记"
                 merged = available_output_path(output_dir / f"{safe_file_stem(name) or '未标记'}.mp4")
                 if merged.resolve() in sources:
                     raise ProtocolError(
@@ -2885,14 +2887,39 @@ class EngineService:
         candidates: list[Dict[str, Any]],
     ) -> Dict[str, Dict[str, Any]]:
         videos: Dict[str, Dict[str, Any]] = {}
+        embedded = {
+            candidate["video_id"]: candidate["source_video"]
+            for candidate in candidates
+            if isinstance(candidate.get("source_video"), dict)
+        }
         for video_id in dict.fromkeys(candidate.get("video_id") for candidate in candidates):
-            video = store.video(video_id) if isinstance(video_id, str) else None
+            video = embedded.get(video_id)
+            if video is None:
+                video = store.video(video_id) if isinstance(video_id, str) else None
             if not video:
                 raise ProtocolError("VIDEO_NOT_FOUND", "导出任务缺少有效视频")
             source = self._validated_source(video)
             self._ensure_disk_space(store.root, source)
             videos[video_id] = {**video, "source": source}
         return videos
+
+    @classmethod
+    def _check_external_project_identities(cls, candidates: list[Dict[str, Any]]) -> None:
+        checked = set()
+        for candidate in candidates:
+            source = candidate.get("source_project")
+            if not isinstance(source, dict) or not source.get("database_identity"):
+                continue
+            root = source.get("root")
+            if not isinstance(root, str) or root in checked:
+                continue
+            checked.add(root)
+            try:
+                identity = cls._source_identity(Path(root) / "project.db")
+            except ProtocolError as exc:
+                raise ProtocolError("PROJECT_CHANGED", "历史项目已被删除或替换") from exc
+            if list(identity) != list(source["database_identity"]):
+                raise ProtocolError("PROJECT_CHANGED", "历史项目在导出期间发生变化，请重试")
 
     @staticmethod
     def _candidate_trail(candidate: Dict[str, Any]) -> list[list[float]]:
@@ -2901,7 +2928,11 @@ class EngineService:
         return trajectory_points(candidate.get("evidence_json"), int(candidate["event_time_ms"]))
 
     @staticmethod
-    def _candidate_rim(store: ProjectStore, candidate: Dict[str, Any]) -> Dict[str, float] | None:
+    def _candidate_rim(
+        store: ProjectStore | None,
+        candidate: Dict[str, Any],
+        roi: Dict[str, Any] | None = None,
+    ) -> Dict[str, float] | None:
         """慢放特写的篮筐位置：优先用这个进球当时跟踪到的篮筐，没有就用项目里设的篮筐框。"""
         if str(candidate.get("detector_version") or "").startswith("manual"):
             return None
@@ -2915,7 +2946,7 @@ class EngineService:
                 "y": float(overlay_rim["rim_y"]),
                 "width": float(overlay_rim["width"]),
             }
-        roi = store.active_roi(candidate["video_id"])
+        roi = roi or (store.active_roi(candidate["video_id"]) if store else None)
         hoop = ((roi or {}).get("calibration") or {}).get("hoop_bbox")
         if isinstance(hoop, list) and len(hoop) == 4:
             x1, y1, x2, _ = (float(value) for value in hoop)
@@ -2936,12 +2967,20 @@ class EngineService:
             raise ProtocolError("INVALID_REQUEST", "player_ids 必须是字符串列表")
         include_unassigned = payload.get("include_unassigned", True) is True
         selected_players = {item for item in requested_player_ids or []}
-        video_ids = [video["id"] for video in store.list_videos()]
+        videos = store.list_videos()
+        videos_by_id = {video["id"]: video for video in videos}
+        video_ids = [video["id"] for video in videos]
         segments = {item: index for index, item in enumerate(video_ids, 1)} if len(video_ids) > 1 else {}
+        project = store.project()
+        source_project = {
+            "id": project["id"], "name": project["name"], "root": str(store.root),
+        }
         candidate_snapshot = [
             {
                 "id": candidate["id"],
                 "video_id": candidate["video_id"],
+                "source_project": source_project,
+                "source_video": videos_by_id[candidate["video_id"]],
                 **({"segment": segments[candidate["video_id"]]} if segments else {}),
                 "event_time_ms": int(candidate["event_time_ms"]),
                 "review_start_ms": int(candidate["review_start_ms"]),
@@ -2962,6 +3001,78 @@ class EngineService:
         if not candidate_snapshot:
             raise ProtocolError("NO_EXPORT_CANDIDATES", "没有可导出的候选片段")
         return requested_player_ids, include_unassigned, candidate_snapshot
+
+    def _external_candidate_snapshots(
+        self, store: ProjectStore, payload: Dict[str, Any],
+    ) -> list[Dict[str, Any]]:
+        selections = payload.get("source_projects", [])
+        if not isinstance(selections, list) or len(selections) > 15:
+            raise ProtocolError("INVALID_REQUEST", "source_projects 最多选择 15 个历史项目")
+        validated = []
+        roots = {store.root}
+        for selection in selections:
+            if not isinstance(selection, dict):
+                raise ProtocolError("INVALID_REQUEST", "source_projects 必须是项目列表")
+            raw_root = selection.get("project_root")
+            if not isinstance(raw_root, str) or not raw_root.strip():
+                raise ProtocolError("INVALID_REQUEST", "历史项目缺少 project_root")
+            root = Path(raw_root).expanduser().resolve()
+            if root in roots:
+                raise ProtocolError("INVALID_REQUEST", "导出项目不能重复")
+            roots.add(root)
+            player_ids = selection.get("player_ids")
+            if player_ids is not None and (
+                not isinstance(player_ids, list)
+                or not all(isinstance(item, str) and item for item in player_ids)
+            ):
+                raise ProtocolError("INVALID_REQUEST", "历史项目 player_ids 必须是字符串列表")
+            validated.append((root, selection))
+        snapshots = []
+        for root, selection in validated:
+            try:
+                source = ProjectStore(root).read_export_snapshot()
+            except (OSError, ValueError, LookupError) as exc:
+                raise ProtocolError("PROJECT_INVALID", f"无法只读打开历史项目: {root}") from exc
+            project = source["project"]
+            videos = {video["id"]: video for video in source["videos"]}
+            segments = {
+                video_id: index for index, video_id in enumerate(videos, 1)
+            } if len(videos) > 1 else {}
+            source_project = {
+                "id": project["id"], "name": project["name"], "root": str(root),
+                "database_identity": source["database_identity"],
+            }
+            selected_players = set(selection.get("player_ids") or [])
+            requested = selection.get("player_ids")
+            include_unassigned = selection.get("include_unassigned", True) is True
+            for candidate in source["candidates"]:
+                if candidate.get("selection_status") == "excluded":
+                    continue
+                if requested is not None and not (
+                    candidate.get("player_id") in selected_players
+                    or (include_unassigned and not candidate.get("player_id"))
+                ):
+                    continue
+                original_video_id = candidate["video_id"]
+                namespaced_video_id = f"{project['id']}:{original_video_id}"
+                snapshots.append({
+                    **candidate,
+                    "id": f"{project['id']}:{candidate['id']}",
+                    "video_id": namespaced_video_id,
+                    "source_project": source_project,
+                    "source_video": videos[original_video_id],
+                    **({"segment": segments[original_video_id]} if segments else {}),
+                    "event_time_ms": int(candidate["event_time_ms"]),
+                    "review_start_ms": int(candidate["review_start_ms"]),
+                    "review_end_ms": int(candidate["review_end_ms"]),
+                    "player_name": candidate.get("player_name"),
+                    "rim": self._candidate_rim(
+                        None, candidate, source["rois"].get(original_video_id),
+                    ),
+                    "manual": str(candidate.get("detector_version") or "").startswith("manual"),
+                    "trail": self._candidate_trail(candidate),
+                })
+        return snapshots
 
     def start_export(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         if payload.get("effect", "none") not in EFFECTS:
@@ -2992,6 +3103,7 @@ class EngineService:
             requested_player_ids, include_unassigned, candidate_snapshot = (
                 self._export_candidate_snapshot(store, video_id, payload)
             )
+            candidate_snapshot.extend(self._external_candidate_snapshots(store, payload))
             selected_players = set(requested_player_ids or [])
             checkpoint = {
                 "mode": payload.get("mode", "separate"),
@@ -3001,6 +3113,7 @@ class EngineService:
                 "include_unassigned": include_unassigned,
                 "effect": payload.get("effect", "none"),
                 "presentation": presentation,
+                "source_projects": payload.get("source_projects", []),
                 "candidate_snapshot": candidate_snapshot,
                 "candidate_count": len(candidate_snapshot),
             }
