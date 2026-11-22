@@ -180,3 +180,49 @@ def test_unavailable_hdr_warning_is_persisted_for_completed_export(tmp_path, tag
     assert Path(result['files'][0]).is_file()
     history = store.list_exports(store.project()['id'])
     assert history[0]['metadata']['color_warnings'] == [HDR_UNAVAILABLE]
+
+
+def test_presentation_is_applied_once_to_final_player_outputs(tmp_path, tagged_project, monkeypatch):
+    import engine.python.basketball_engine.service as service_module
+
+    service, store, project_root, _, (zhang, li) = tagged_project
+    _, _, snapshot = service._export_candidate_snapshot(
+        store, None, {'player_ids': [zhang, li], 'include_unassigned': False},
+    )
+    monkeypatch.setattr(service, 'inspect_video', lambda payload: {})
+
+    def base_export(candidates, output_dir, mode, output_path, **kwargs):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b'base video')
+        return {
+            'files': [str(output_path)], 'clip_files': [],
+            'duration_ms': len(candidates) * 1000, 'processing_ms': 1,
+            'merged_overlap_count': 0,
+        }
+
+    enhanced = []
+
+    def enhance(path, config, title, **kwargs):
+        enhanced.append((Path(path).name, title, config))
+        Path(path).write_bytes(b'enhanced video')
+        return {'duration_ms': 4000, 'cover_duration_ms': 3000, 'processing_ms': 2}
+
+    monkeypatch.setattr(service_module, 'export_goal_clips', base_export)
+    monkeypatch.setattr(service_module, 'enhance_video', enhance)
+    result = service._execute_export({
+        'project_root': str(project_root), 'mode': 'merge_by_player',
+        'candidate_snapshot': snapshot, 'output_dir': str(tmp_path / 'out'),
+        'presentation': {},
+    })
+
+    assert [(name, title) for name, title, _ in enhanced] == [
+        ('张三.mp4', '张三'), ('李四_队长.mp4', '李四/队长'),
+    ]
+    assert all(config['cover']['duration_ms'] == 3000 for _, _, config in enhanced)
+    assert all(config['audio']['volume'] == pytest.approx(0.2) for _, _, config in enhanced)
+    assert result['export']['duration_ms'] == 8000
+    assert result['export']['processing_ms'] == 6
+    assert result['export']['metadata']['presentation']['files'] == [
+        {'file': enhanced[0][0], 'duration_ms': 4000, 'cover_duration_ms': 3000},
+        {'file': enhanced[1][0], 'duration_ms': 4000, 'cover_duration_ms': 3000},
+    ]

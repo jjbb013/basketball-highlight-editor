@@ -95,3 +95,74 @@ def test_commit_failure_after_thread_start_rolls_back_job(tmp_path, monkeypatch)
     monkeypatch.setattr(service, '_execute_export', lambda *a, **k: {'export':{'id':'ok'}, 'files':[]})
     assert wait_job(store, service.start_export(payload)['job']['id'])['state'] == 'completed'
     service.shutdown()
+
+
+import json
+
+
+def test_start_and_retry_snapshot_identical_normalized_presentation(tmp_path, monkeypatch):
+    service, store, _, payload = setup_export(tmp_path)
+    payload['presentation'] = {'cover': {'style': 'poster'}, 'audio': {'volume': 0.2}}
+    payloads = []
+
+    def execute(worker_payload, **kwargs):
+        payloads.append(worker_payload)
+        raise OSError('stop before publishing')
+
+    monkeypatch.setattr(service, '_execute_export', execute)
+    first = service.start_export(payload)['job']
+    assert wait_job(store, first['id'])['state'] == 'failed'
+    retry = service.retry_export({'project_root': str(store.root), 'job_id': first['id']})['job']
+    assert wait_job(store, retry['id'])['state'] == 'failed'
+
+    assert len(payloads) == 2
+    assert payloads[0]['presentation'] == payloads[1]['presentation']
+    assert payloads[0]['presentation']['cover']['style'] == 'poster'
+    assert payloads[0]['presentation']['cover']['duration_ms'] == 3000
+    assert payloads[0]['presentation']['audio']['track'] == 'electronic_drive'
+    saved = json.loads(store.get_job(first['id'])['checkpoint_json'])
+    assert saved['presentation'] == payloads[0]['presentation']
+    service.shutdown()
+
+
+def test_legacy_export_payload_explicitly_disables_presentation(tmp_path, monkeypatch):
+    service, store, _, payload = setup_export(tmp_path)
+    payloads = []
+
+    def execute(worker_payload, **kwargs):
+        payloads.append(worker_payload)
+        raise OSError('stop before publishing')
+
+    monkeypatch.setattr(service, '_execute_export', execute)
+    job = service.start_export(payload)['job']
+    assert wait_job(store, job['id'])['state'] == 'failed'
+    assert payloads[0]['presentation']['cover']['enabled'] is False
+    assert payloads[0]['presentation']['audio']['enabled'] is False
+    service.shutdown()
+
+
+def test_presentation_failure_cleans_generated_output_and_keeps_previous(tmp_path, monkeypatch):
+    service, store, _, payload = setup_export(tmp_path)
+    payload['presentation'] = {}
+    target = Path(payload['output_path'])
+    target.write_bytes(b'previous complete export')
+    monkeypatch.setattr(service, 'inspect_video', lambda payload: {})
+
+    def base_export(candidates, output_dir, mode, output_path, **kwargs):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b'new base export')
+        return {'files': [str(output_path)], 'clip_files': [], 'duration_ms': 1000,
+                'processing_ms': 1, 'merged_overlap_count': 0}
+
+    def fail_after_partial_output(path, config, title, **kwargs):
+        Path(path).write_bytes(b'partial enhanced output')
+        raise OSError('injected presentation failure')
+
+    monkeypatch.setattr(module, 'export_goal_clips', base_export)
+    monkeypatch.setattr(module, 'enhance_video', fail_after_partial_output)
+    job = service.start_export(payload)['job']
+    assert wait_job(store, job['id'])['state'] == 'failed'
+    assert target.read_bytes() == b'previous complete export'
+    assert not list(target.parent.glob('.result.stage_*.mp4'))
+    assert store.list_exports(store.project()['id']) == []
+    service.shutdown()

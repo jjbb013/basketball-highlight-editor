@@ -44,6 +44,7 @@ from .adapters.export import (
     validate_output_file,
 )
 from .adapters.hdr import color_plan, hdr_filter_available, HDR_UNKNOWN, TONEMAP_FILTER
+from .adapters.presentation import enhance_video, normalize_presentation
 from .adapters.runtime_preflight import DetectorPreflight, runtime_error
 from basketball_highlight.runtime_errors import is_runtime_failure
 from .protocol import ProtocolError
@@ -1475,7 +1476,7 @@ class EngineService:
             retry_payload["output_dir"] = checkpoint["output_dir"]
         if checkpoint.get("output_path") is not None:
             retry_payload["output_path"] = checkpoint["output_path"]
-        for key in ("player_ids", "include_unassigned", "effect"):
+        for key in ("player_ids", "include_unassigned", "effect", "presentation"):
             if key in checkpoint:
                 retry_payload[key] = checkpoint[key]
         # Check what start_export would reject before ending the old job, so a
@@ -2632,6 +2633,12 @@ class EngineService:
                     process_callback=process_callback,
                     effect=effect,
                 )
+            self._enhance_finished_exports(
+                result, candidates, mode, payload,
+                progress_callback=progress_callback,
+                cancel_check=cancel_check,
+                process_callback=process_callback,
+            )
         except (OSError, ValueError, subprocess.CalledProcessError) as exc:
             raise ProtocolError("EXPORT_FAILED", f"导出失败: {exc}") from exc
         try:
@@ -2684,6 +2691,7 @@ class EngineService:
                     "files": result["files"],
                     "clip_files": result["clip_files"],
                     "merged_overlap_count": result["merged_overlap_count"],
+                    "presentation": result.get("presentation", {"files": []}),
                     **({"color_warnings": sorted(color_warnings)} if color_warnings else {}),
                     **({"source_unverified": True} if source_unverified else {}),
                 },
@@ -2700,6 +2708,9 @@ class EngineService:
                         published = True
                         export_values["output_path"] = str(final_output)
                         export_values["metadata"]["files"] = [str(final_output)]
+                        for item in export_values["metadata"]["presentation"]["files"]:
+                            if item["file"] == merged_output.name:
+                                item["file"] = final_output.name
                     export = (store.create_export(export_values) if job_id is None else
                               store.complete_export_job(export_values, job_id, job_checkpoint or {}))
                 except Exception:
@@ -2738,6 +2749,66 @@ class EngineService:
                 Path(path).unlink(missing_ok=True)
             raise
 
+    @staticmethod
+    def _export_presentation(payload: Dict[str, Any]) -> Dict[str, Any]:
+        # Old clients did not have presentation settings. Keep their output
+        # unchanged; the new UI sends {} to request the documented defaults.
+        raw = payload.get("presentation")
+        if raw is None:
+            raw = {"cover": {"enabled": False}, "audio": {"enabled": False}}
+        try:
+            return normalize_presentation(raw)
+        except ValueError as exc:
+            raise ProtocolError("INVALID_REQUEST", f"封面或背景音乐设置无效: {exc}") from exc
+
+    def _enhance_finished_exports(
+        self,
+        result: Dict[str, Any],
+        candidates: list[Dict[str, Any]],
+        mode: str,
+        payload: Dict[str, Any],
+        progress_callback=None,
+        cancel_check=None,
+        process_callback=None,
+    ) -> None:
+        presentation = self._export_presentation(payload)
+        files = result.get("files", [])
+        if not files:
+            result["presentation"] = {"files": []}
+            return
+        if not presentation["cover"]["enabled"] and not presentation["audio"]["enabled"]:
+            result["presentation"] = {"files": []}
+            return
+        titles = result.pop("presentation_titles", {})
+        enhanced_files = []
+        try:
+            for index, raw_path in enumerate(files):
+                if cancel_check and cancel_check():
+                    raise PipelineCancelled("JOB_CANCELLED")
+                if progress_callback:
+                    progress_callback("presentation", 0.95 + 0.04 * index / len(files))
+                path = Path(raw_path)
+                title = presentation["cover"]["title"] or titles.get(raw_path)
+                if not title and mode == "separate" and index < len(candidates):
+                    title = candidates[index].get("player_name")
+                enhanced = enhance_video(
+                    path, presentation, title or "进球集锦",
+                    cancel_check=cancel_check,
+                    process_callback=process_callback,
+                )
+                result["processing_ms"] += int(enhanced["processing_ms"])
+                enhanced_files.append({
+                    "file": path.name,
+                    "duration_ms": int(enhanced["duration_ms"]),
+                    "cover_duration_ms": int(enhanced["cover_duration_ms"]),
+                })
+            result["duration_ms"] = sum(item["duration_ms"] for item in enhanced_files)
+            result["presentation"] = {"files": enhanced_files}
+        except Exception:
+            for raw_path in {*result.get("files", []), *result.get("clip_files", [])}:
+                Path(raw_path).unlink(missing_ok=True)
+            raise
+
     def _export_merged_per_player(
         self,
         store: ProjectStore,
@@ -2757,6 +2828,7 @@ class EngineService:
         output_dir.mkdir(parents=True, exist_ok=True)
         files: list[str] = []
         clip_files: list[str] = []
+        presentation_titles: dict[str, str] = {}
         duration_ms = 0
         processing_ms = 0
         merged_overlap_count = 0
@@ -2788,6 +2860,7 @@ class EngineService:
                 )
                 files.extend(result["files"])
                 clip_files.extend(result["clip_files"])
+                presentation_titles.update(dict.fromkeys(result["files"], name or "未标记"))
                 duration_ms += result["duration_ms"]
                 processing_ms += result["processing_ms"]
                 merged_overlap_count += result["merged_overlap_count"]
@@ -2800,6 +2873,7 @@ class EngineService:
         return {
             "files": files,
             "clip_files": clip_files,
+            "presentation_titles": presentation_titles,
             "duration_ms": duration_ms,
             "merged_overlap_count": merged_overlap_count,
             "processing_ms": processing_ms,
@@ -2899,6 +2973,7 @@ class EngineService:
         video_id = payload.get("video_id")
         if not project or (video_id is not None and not (isinstance(video_id, str) and store.video(video_id))):
             raise ProtocolError("VIDEO_NOT_FOUND", "导出任务缺少有效视频")
+        presentation = self._export_presentation(payload)
         with self._job_lock:
             self._job_threads = {
                 job_id: thread
@@ -2925,6 +3000,7 @@ class EngineService:
                 "player_ids": sorted(selected_players) if requested_player_ids is not None else None,
                 "include_unassigned": include_unassigned,
                 "effect": payload.get("effect", "none"),
+                "presentation": presentation,
                 "candidate_snapshot": candidate_snapshot,
                 "candidate_count": len(candidate_snapshot),
             }
@@ -2943,6 +3019,7 @@ class EngineService:
                     job_id = job["id"]
                     worker_payload = {
                         **payload,
+                        "presentation": presentation,
                         "candidate_snapshot": candidate_snapshot,
                         "_project_identity": project_identity,
                     }
