@@ -238,10 +238,12 @@ class EngineSession {
     double? proxyFps,
     String? modelPath,
     String? mode,
+    bool playerIdentity = true,
   }) {
     return client.request('start_analysis', <String, dynamic>{
       'project_root': projectRoot,
       'video_id': videoId,
+      'player_identity': playerIdentity,
       ...?_optionalEntry('sample_fps', sampleFps),
       ...?_optionalEntry('window_seconds', windowSeconds),
       ...?_optionalEntry('before_seconds', beforeSeconds),
@@ -267,11 +269,13 @@ class EngineSession {
     double? proxyFps,
     String? modelPath,
     String? mode,
+    bool? playerIdentity,
   }) {
     return client.request('retry_analysis', <String, dynamic>{
       'project_root': projectRoot,
       'video_id': videoId,
       'job_id': jobId,
+      ...?_optionalEntry('player_identity', playerIdentity),
       ...?_optionalEntry('sample_fps', sampleFps),
       ...?_optionalEntry('window_seconds', windowSeconds),
       ...?_optionalEntry('before_seconds', beforeSeconds),
@@ -403,6 +407,18 @@ class EngineSession {
     return client.request('create_player', <String, dynamic>{
       'project_root': projectRoot,
       'name': name,
+    });
+  }
+
+  Future<JsonMap> nameIdentity({
+    required String projectRoot,
+    required String identityId,
+    required String playerName,
+  }) {
+    return client.request('name_identity', <String, dynamic>{
+      'project_root': projectRoot,
+      'identity_id': identityId,
+      'player_name': playerName,
     });
   }
 

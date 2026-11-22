@@ -140,6 +140,19 @@ def run_batch(model, pending, device, conf, batch):
     pending.clear()
 
 
+def judge_job(job, fps):
+    """Keep detections and their timed source trajectory for later stages."""
+    frame_times = [(job["first"] + index) / fps for index in range(len(job["frames"]))]
+    return {
+        **assess_rim_crossing(
+            job["frames"], job["rim"], job["net_motion_series"], frame_times=frame_times,
+        ),
+        "frames": job["frames"],
+        "frame_times": frame_times,
+        "net_motion_series": job["net_motion_series"],
+    }
+
+
 def main(args):
     started = time.perf_counter()
     candidates = json.loads(Path(args.candidates).read_text(encoding="utf-8"))["candidates"]
@@ -192,11 +205,7 @@ def main(args):
     cap.release()
     for job in jobs:
         # Keep the raw detections so the engine can re-judge cached runs.
-        results[job["index"]] = {
-            **assess_rim_crossing(job["frames"], job["rim"], job["net_motion_series"]),
-            "frames": job["frames"],
-            "net_motion_series": job["net_motion_series"],
-        }
+        results[job["index"]] = judge_job(job, fps)
     results = apply_video_occlusion(results)
 
     output = Path(args.output)

@@ -287,7 +287,10 @@ def apply_rim_checks(
                 key: result.get(key) for key in ("version", "status", "reason", "rim_width_px")
             })
             continue
-        checks.append(assess_rim_crossing(frames, item["rim"], result.get("net_motion_series")))
+        checks.append(assess_rim_crossing(
+            frames, item["rim"], result.get("net_motion_series"),
+            frame_times=result.get("frame_times"),
+        ))
     for match, check in zip(matches, apply_video_occlusion(checks)):
         # Coarse fallbacks are candidates the refine stage did not confirm.
         match["rim_check"] = keep_unless_seen(check, refined=not match.get("coarse_crossing"))
@@ -311,6 +314,29 @@ def build_rim_check_command(
         "--video", str(source_video), "--model", str(model_path),
         "--candidates", str(candidates_path), "--output", str(output_path),
         "--batch", str(batch), "--device", device,
+    ]
+
+
+def build_player_identification_command(
+    repo_root: Path,
+    source_video: Path,
+    model_path: Path,
+    pose_model_path: Path,
+    candidates_path: Path,
+    output_path: Path,
+    source_roi: Iterable[float],
+    *,
+    device: str = "auto",
+) -> list[str]:
+    return [
+        sys.executable, _script(repo_root, "identify_players.py"),
+        "--video", str(source_video.resolve()),
+        "--model", str(model_path.resolve()),
+        "--pose-model", str(pose_model_path.resolve()),
+        "--candidates", str(candidates_path.resolve()),
+        "--output", str(output_path.resolve()),
+        "--roi", *[str(round(float(value))) for value in source_roi],
+        "--device", device,
     ]
 
 

@@ -2798,6 +2798,26 @@ class ProjectNotifier extends Notifier<ProjectState> {
     }, busyMessage: '正在保存球员标签…');
   }
 
+  Future<int> nameIdentity(String identityId, String playerName) async {
+    var updated = 0;
+    await _runPlayerChange(
+      (generation) async {
+        final result = await ref
+            .read(projectSessionProvider)
+            .nameIdentity(identityId, playerName);
+        if (_disposed || generation != _projectLoadGeneration) return;
+        // The backend commits the player, identity and all automatic candidates
+        // together. Refresh the actual transaction rather than guessing which
+        // clips share an appearance cluster; manual assignments stay untouched.
+        await refreshCandidates(generation: generation);
+        updated = (result['updated_candidates'] as num?)?.toInt() ?? 0;
+      },
+      successMessage: '身份已命名，同身份自动候选已同步',
+      busyMessage: '正在命名身份并同步候选…',
+    );
+    return updated;
+  }
+
   Future<void> _runPlayerChange(
     Future<void> Function(int generation) action, {
     String? successMessage,

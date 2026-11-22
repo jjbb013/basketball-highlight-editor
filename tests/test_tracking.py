@@ -91,3 +91,19 @@ def test_link_ball_detections_ignores_malformed_detection_entries():
     )
 
     assert trajectory == [{"time": 10.0, "x": 100.0, "y": 50.0}]
+
+
+def test_missing_frames_cannot_attach_an_unrelated_ball_with_a_speed_jump():
+    # Numerical reduction of the 59 s source-video false association. The
+    # 58.933 s detection is not the shot ball and must not bridge to the release.
+    trajectory = link_ball_detections(
+        [
+            _record(58.2, (1255.46, 492.76)),
+            _record(58.933, (898.35, 540.16)),
+            _record(59.2, (775.89, 434.47)),
+        ],
+        anchor={"time": 59.492766, "x": 761.75, "y": 407.56},
+        rim_width=60,
+    )
+
+    assert [point["time"] for point in trajectory] == [59.2, 59.492766]

@@ -457,6 +457,7 @@ void main() {
       expect(transport.payloads[3], {
         'project_root': resolvedPath(root),
         'video_id': 'video-1',
+        'player_identity': true,
         'sample_fps': 10.0,
       });
       expect(transport.payloads[4], {'project_root': resolvedPath(root)});
@@ -595,6 +596,37 @@ void main() {
         'project_root': resolvedPath(root),
         'candidate_id': 'candidate-1',
       });
+    },
+  );
+
+  test(
+    'EngineSession forwards one identity naming operation and analysis opt-in',
+    () async {
+      final transport = _FakeEngineTransport()
+        ..responses['name_identity'] = {
+          'player': {'id': 'p1', 'name': 'Will'},
+          'updated_candidates': 10,
+        };
+      final session = EngineSession(transport);
+
+      await session.nameIdentity(
+        projectRoot: '/tmp/project',
+        identityId: 'identity-1',
+        playerName: 'Will',
+      );
+      await session.startAnalysis(
+        projectRoot: '/tmp/project',
+        videoId: 'video-1',
+        playerIdentity: true,
+      );
+
+      expect(transport.commands, ['name_identity', 'start_analysis']);
+      expect(transport.payloads.first, {
+        'project_root': '/tmp/project',
+        'identity_id': 'identity-1',
+        'player_name': 'Will',
+      });
+      expect(transport.payloads.last['player_identity'], isTrue);
     },
   );
 }

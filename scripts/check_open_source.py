@@ -35,6 +35,9 @@ BLOCKED_SUFFIXES = {
 # address. Other model/native artifacts remain blocked by the audit.
 ALLOWED_RELEASE_ARTIFACTS = {
     "models/bball_model.pt",
+    # Ultralytics source, SHA-256 and AGPL-3.0 notices are recorded in
+    # models/README.md and docs/THIRD_PARTY_NOTICES.md.
+    "models/yolo11n-pose.pt",
     "apps/mobile/android/app/src/main/assets/models/bball_model_qnn_v81.onnx",
 }
 # One intentionally tracked website demo; all other videos remain blocked.

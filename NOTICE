@@ -1,8 +1,21 @@
 Basketball Highlight Editor
 
-This repository is distributed under the MIT License. See LICENSE.
+The original project components remain under the MIT License. See LICENSE.
+
+The macOS player-identification build incorporates Ultralytics and the official
+YOLO11n Pose weights under GNU AGPL-3.0. The combined application distribution
+is offered under AGPL-3.0; this does not replace the original MIT notice for
+separable original components. See docs/licenses/AGPL-3.0.txt.
+
+Modified on 2026-11-23 with local player identification, enhanced exports, and
+macOS packaging. Corresponding source and build scripts are available at:
+https://github.com/jjbb013/basketball-highlight-editor
+The exact source reference is recorded in each prerelease tag and its notes.
 
 Third-party packages, fonts, codecs, model weights, and reference repositories
 may have separate licenses. They are not automatically covered by the project
 license. See docs/THIRD_PARTY_NOTICES.md and
 docs/MODEL_AND_DATA_LICENSES.md before redistributing a build or model.
+The provenance and redistribution rights of models/bball_model.pt and its
+training data have not been fully verified; this is an explicit release risk,
+not a grant of additional rights.

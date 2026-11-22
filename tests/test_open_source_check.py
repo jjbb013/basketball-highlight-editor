@@ -40,3 +40,22 @@ def test_demo_allowlist_and_real_violations(tmp_path):
     result = check()
     assert result.returncode == 1
     assert "binary/video/model artifact: website/assets/recording-demo.mp4" in result.stdout
+
+
+def test_documented_pose_runtime_weight_is_an_allowed_release_artifact(tmp_path):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    model = tmp_path / "models/yolo11n-pose.pt"
+    model.parent.mkdir(parents=True)
+    model.write_bytes(b"test pose weight placeholder")
+    (tmp_path / "models/README.md").write_text("Document the model source and license.", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "models/yolo11n-pose.pt", "models/README.md"], check=True)
+
+    result = subprocess.run(
+        [sys.executable, str(CHECK), "--root", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout
+    assert "binary/video/model artifact: models/yolo11n-pose.pt" not in result.stdout

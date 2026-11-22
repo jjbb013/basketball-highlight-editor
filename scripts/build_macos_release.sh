@@ -47,6 +47,14 @@ cp -R "$RUNTIME_OUT"/. "$APP_RUNTIME/"
   --ffprobe "$APP_RUNTIME/bin/ffprobe" \
   --model "$APP_RUNTIME/models/bball_model.pt"
 
+# Load both networks from the exact files embedded in the app before signing.
+# YOLO_AUTOINSTALL prevents a packaged app from silently repairing itself online.
+SMOKE_CONFIG="$(mktemp -d "${TMPDIR:-/tmp}/bhe-model-smoke.XXXXXX")"
+export YOLO_AUTOINSTALL=false YOLO_CONFIG_DIR="$SMOKE_CONFIG" PYTHONDONTWRITEBYTECODE=1
+"$RUNTIME_OUT/python/bin/python3" "$APP_RUNTIME/scripts/check_detector.py" --model "$APP_RUNTIME/models/bball_model.pt" --device cpu
+"$RUNTIME_OUT/python/bin/python3" "$APP_RUNTIME/scripts/check_detector.py" --model "$APP_RUNTIME/models/yolo11n-pose.pt" --device cpu
+rm -rf "$SMOKE_CONFIG"
+
 if [[ -n "${BHE_CODESIGN_IDENTITY:-}" ]]; then
   codesign --deep --force --options runtime \
     --sign "$BHE_CODESIGN_IDENTITY" "$APP"

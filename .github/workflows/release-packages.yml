@@ -315,6 +315,8 @@ jobs:
           export YOLO_CONFIG_DIR="$RUNNER_TEMP/bhe-yolo-smoke"
           python3 scripts/check_numpy_preprocess.py --python \
             "apps/desktop/build/macos/Build/Products/Release/BHE.app/Contents/Resources/runtime/python/bin/python3"
+          python3 scripts/check_packaged_models.py --runtime \
+            "apps/desktop/build/macos/Build/Products/Release/BHE.app/Contents/Resources/runtime"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4

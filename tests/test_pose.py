@@ -63,3 +63,42 @@ def test_pose_detector_loads_model_only_when_prediction_is_requested():
     detector = PoseDetector("private-pose.pt", loader=lambda path: (_ for _ in ()).throw(AssertionError(path)))
     with pytest.raises(AssertionError, match="private-pose.pt"):
         detector.predict(object(), time_ms=0)
+
+
+def test_pose_batch_forwards_runtime_options_and_preserves_frame_times():
+    calls = []
+
+    class Model:
+        def predict(self, images, **kwargs):
+            calls.append((images, kwargs))
+            points = [[0, 0] for _ in range(11)]
+            return [FakeResult([FakeBox([0, 0, 100, 200], 0.8)], FakeKeypoints([points], [[0.9] * 11])) for _ in images]
+
+    detector = PoseDetector("pose.pt", loader=lambda _: Model())
+    result = detector.predict_batch(
+        ["first", "second"], [100, 200], device="mps", conf=0.3, imgsz=960, batch=2,
+    )
+
+    assert [people[0]["time_ms"] for people in result] == [100, 200]
+    assert calls == [(
+        ["first", "second"],
+        {"verbose": False, "device": "mps", "conf": 0.3, "imgsz": 960, "batch": 2},
+    )]
+
+
+def test_pose_appearance_is_opt_in_and_uses_only_the_local_source_frame():
+    from PIL import Image
+
+    class Result(FakeResult):
+        orig_img = Image.new("RGB", (320, 240), (180, 40, 20))
+
+    class Model:
+        def predict(self, images, **kwargs):
+            points = [[0, 0] for _ in range(11)]
+            return [Result([FakeBox([10, 20, 110, 220], 0.8)], FakeKeypoints([points], [[0.9] * 11]))]
+
+    people = PoseDetector(
+        "pose.pt", loader=lambda _: Model(), include_appearance=True,
+    ).predict_batch([object()], [100])[0]
+    assert people[0]["appearance"]["shirt"]["quality"] > 0
+    assert people[0]["detection_confidence"] == 0.8

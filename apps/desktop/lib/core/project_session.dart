@@ -109,6 +109,14 @@ class ProjectSessionScope {
     return engine.createPlayer(projectRoot: projectRoot, name: name);
   }
 
+  Future<JsonMap> nameIdentity(String identityId, String playerName) {
+    return engine.nameIdentity(
+      projectRoot: projectRoot,
+      identityId: identityId,
+      playerName: playerName,
+    );
+  }
+
   Future<JsonMap> setCandidatePlayer({
     required String candidateId,
     String? playerId,
@@ -528,6 +536,7 @@ class ProjectSession {
     double? proxyFps,
     String? modelPath,
     String? mode,
+    bool playerIdentity = true,
   }) {
     return engine.startAnalysis(
       projectRoot: _requireProjectRoot(),
@@ -541,6 +550,7 @@ class ProjectSession {
       proxyFps: proxyFps,
       modelPath: modelPath,
       mode: mode,
+      playerIdentity: playerIdentity,
     );
   }
 
@@ -555,6 +565,7 @@ class ProjectSession {
     double? proxyFps,
     String? modelPath,
     String? mode,
+    bool? playerIdentity,
   }) {
     return engine.retryAnalysis(
       projectRoot: _requireProjectRoot(),
@@ -569,6 +580,7 @@ class ProjectSession {
       proxyFps: proxyFps,
       modelPath: modelPath,
       mode: mode,
+      playerIdentity: playerIdentity,
     );
   }
 
@@ -626,6 +638,14 @@ class ProjectSession {
 
   Future<JsonMap> createPlayer(String name) {
     return engine.createPlayer(projectRoot: _requireProjectRoot(), name: name);
+  }
+
+  Future<JsonMap> nameIdentity(String identityId, String playerName) {
+    return engine.nameIdentity(
+      projectRoot: _requireProjectRoot(),
+      identityId: identityId,
+      playerName: playerName,
+    );
   }
 
   Future<JsonMap> deletePlayer(String playerId) {

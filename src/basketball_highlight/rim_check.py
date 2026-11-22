@@ -28,7 +28,7 @@ manual review.
 """
 from statistics import median
 
-RIM_CHECK_VERSION = "rim-dense-v2"
+RIM_CHECK_VERSION = "rim-dense-v3"
 AUTO_REVIEW_REASON = "auto_rim_check"
 MIN_RIM_WIDTH_PX = 30.0
 CROP_RIM_WIDTHS = 5.0
@@ -195,6 +195,7 @@ def _track_crossings(track, tracks):
             "track_points": k + 1 + len(after),
             "track_span": round(max(point["y"] for point in path) - min(point["y"] for point in path), 3),
             "cross_frame": below["i"],
+            "path": path,
         }
 
 
@@ -258,13 +259,8 @@ def net_motion_score(series, cross_frame):
     return round(sum(after[-5:]) / len(after[-5:]) - median(before), 3)
 
 
-def assess_rim_crossing(frames, rim, net_motion_series=None):
-    """Judge one candidate from per-frame detections in source coordinates.
-
-    ``frames`` is the ordered list of consecutive source frames; each item is
-    a list of detections ``{"name", "confidence", "xyxy"}``.
-    ``net_motion_series`` comes from ``net_motion.net_motion_series``.
-    """
+def assess_rim_crossing(frames, rim, net_motion_series=None, frame_times=None):
+    """Judge one candidate and retain the source trajectory supporting it."""
     rim_width = float(rim["width"])
     if rim_width < MIN_RIM_WIDTH_PX:
         return skipped_result("small_rim", rim_width)
@@ -275,6 +271,14 @@ def assess_rim_crossing(frames, rim, net_motion_series=None):
     crossings = [crossing for track in tracks for crossing in _track_crossings(track, tracks)]
     best = min(crossings, key=_rank) if crossings else None
     reason = rejection_reason(best)
+    path = best.pop("path", []) if best else []
+    trajectory = []
+    if frame_times is not None and len(frame_times) == len(frames):
+        trajectory = [{
+            "time": float(frame_times[point["i"]]),
+            "x": round(float(rim["center_x"]) + point["x"] * rim_width, 2),
+            "y": round(float(rim["rim_y"]) + point["y"] * rim_width, 2),
+        } for point in path]
     return {
         "version": RIM_CHECK_VERSION,
         "status": "made" if reason is None else "rejected",
@@ -283,6 +287,7 @@ def assess_rim_crossing(frames, rim, net_motion_series=None):
         "frames": len(frames),
         "ball_approached": _ball_approached(tracks),
         **(best or {}),
+        "trajectory": trajectory,
         "net_motion": net_motion_score(net_motion_series, best["cross_frame"])
         if best and net_motion_series else None,
     }

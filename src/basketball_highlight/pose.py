@@ -59,9 +59,13 @@ def normalize_pose_result(result: Any, time_ms: int) -> list[dict]:
 class PoseDetector:
     """Lazy wrapper so feature normalization does not load native ML runtimes."""
 
-    def __init__(self, model_path: str | Path, device: str | None = None, loader=None):
+    def __init__(
+        self, model_path: str | Path, device: str | None = None, loader=None,
+        *, include_appearance: bool = False,
+    ):
         self.model_path = Path(model_path)
         self._loader = loader or (lambda path: load_detector(path, device=device))
+        self._include_appearance = include_appearance
         self._model = None
 
     def predict(self, image: Any, time_ms: int) -> list[dict]:
@@ -69,3 +73,42 @@ class PoseDetector:
             self._model = self._loader(self.model_path)
         results = self._model.predict(image, verbose=False)
         return normalize_pose_result(results[0], time_ms) if results else []
+
+    def predict_batch(
+        self,
+        images: list[Any],
+        time_ms: list[int],
+        *,
+        device: str | None = None,
+        conf: float = 0.25,
+        imgsz: int = 960,
+        batch: int = 8,
+    ) -> list[list[dict]]:
+        """Run source-frame pose inference without losing frame timestamps."""
+        if len(images) != len(time_ms):
+            raise ValueError("POSE_FRAME_TIME_MISMATCH")
+        if not images:
+            return []
+        if self._model is None:
+            self._model = self._loader(self.model_path)
+        options = {"verbose": False, "conf": conf, "imgsz": imgsz, "batch": batch}
+        if device is not None:
+            options["device"] = device
+        results = self._model.predict(images, **options)
+        output = []
+        for result, stamp in zip(results, time_ms):
+            people = normalize_pose_result(result, stamp)
+            original = getattr(result, "orig_img", None)
+            if self._include_appearance and original is not None:
+                from PIL import Image
+                import numpy as np
+                from .appearance import image_appearance
+                image = original if isinstance(original, Image.Image) else Image.fromarray(
+                    np.asarray(original)[..., :3][..., ::-1]
+                )
+                for person in people:
+                    person["appearance"] = image_appearance(
+                        image, person["bbox"], quality=person["detection_confidence"],
+                    )
+            output.append(people)
+        return output

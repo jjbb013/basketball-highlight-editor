@@ -81,6 +81,112 @@ class _ClosingConnection(sqlite3.Connection):
             self.close()
 
 
+def _persist_identity_analysis(
+    connection: sqlite3.Connection,
+    project_id: str,
+    rows: list[Dict[str, Any]],
+    identity_analysis: Dict[str, Any],
+    existing_assignments: Dict[str, Dict[str, Any]],
+    matched_old: Dict[str, str],
+    timestamp: str,
+) -> None:
+    """Apply one analysis snapshot inside the candidate replacement transaction."""
+    from basketball_highlight.identity_model import LocalIdentityModel
+
+    model = LocalIdentityModel.from_dict(identity_analysis.get("model", {}))
+    results = identity_analysis.get("results", {})
+    if not isinstance(results, dict):
+        raise ValueError("IDENTITY_ANALYSIS_INVALID")
+    for identity_id, prototype in model.prototypes.items():
+        existing = connection.execute(
+            "SELECT project_id FROM player_identities WHERE id = ?", (identity_id,),
+        ).fetchone()
+        if existing and existing["project_id"] != project_id:
+            raise LookupError("IDENTITY_NOT_FOUND")
+        connection.execute(
+            """
+            INSERT INTO player_identities (
+                id, project_id, player_id, model_version, prototype_json,
+                sample_count, created_at, updated_at
+            ) VALUES (?, ?, NULL, 'local-appearance-v1', ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                prototype_json = excluded.prototype_json,
+                sample_count = excluded.sample_count,
+                updated_at = excluded.updated_at
+            """,
+            (
+                identity_id, project_id,
+                json.dumps(prototype["features"], ensure_ascii=False, sort_keys=True),
+                prototype["samples"], timestamp, timestamp,
+            ),
+        )
+    for row in rows:
+        old_id = matched_old.get(str(row["id"]))
+        previous = existing_assignments.get(old_id)
+        if previous and previous["assignment_source"] == "manual":
+            continue
+        candidate_id = str(row["id"])
+        if candidate_id not in results:
+            continue
+        result = results[candidate_id]
+        if not isinstance(result, dict):
+            raise ValueError("IDENTITY_ANALYSIS_INVALID")
+        identity = result.get("identity") or {}
+        identity_id = identity.get("identity_id")
+        if identity_id is None:
+            connection.execute(
+                "DELETE FROM candidate_player_assignments WHERE candidate_id = ?",
+                (candidate_id,),
+            )
+            continue
+        if identity_id not in model.prototypes:
+            raise LookupError("IDENTITY_NOT_FOUND")
+        confidence = float(identity.get("confidence", 0.0))
+        if not 0 <= confidence <= 1:
+            raise ValueError("INVALID_IDENTITY_CONFIDENCE")
+        stored_identity = connection.execute(
+            "SELECT player_id FROM player_identities WHERE id = ? AND project_id = ?",
+            (identity_id, project_id),
+        ).fetchone()
+        if stored_identity is None:
+            raise LookupError("IDENTITY_NOT_FOUND")
+        touch = result.get("touch") or {}
+        touch_time_ms = touch.get("touch_time_ms")
+        evidence = {key: value for key, value in result.items() if key != "model"}
+        connection.execute(
+            """
+            INSERT INTO candidate_player_assignments (
+                candidate_id, identity_id, player_id, assignment_source,
+                touch_time_ms, touch_confidence, identity_confidence,
+                evidence_json, algorithm_version, updated_at
+            ) VALUES (?, ?, ?, 'automatic', ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(candidate_id) DO UPDATE SET
+                identity_id = excluded.identity_id, player_id = excluded.player_id,
+                assignment_source = 'automatic', touch_time_ms = excluded.touch_time_ms,
+                touch_confidence = excluded.touch_confidence,
+                identity_confidence = excluded.identity_confidence,
+                evidence_json = excluded.evidence_json,
+                algorithm_version = excluded.algorithm_version, updated_at = excluded.updated_at
+            """,
+            (
+                candidate_id, identity_id, stored_identity["player_id"],
+                int(touch_time_ms) if touch_time_ms is not None else None,
+                touch.get("confidence"), confidence,
+                json.dumps(evidence, ensure_ascii=False, sort_keys=True),
+                str(result.get("algorithm_version") or "last-touch-v1"), timestamp,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO candidate_reviews (candidate_id, player_id, status, updated_at)
+            VALUES (?, ?, 'pending', ?)
+            ON CONFLICT(candidate_id) DO UPDATE SET
+                player_id = excluded.player_id, updated_at = excluded.updated_at
+            """,
+            (candidate_id, stored_identity["player_id"], timestamp),
+        )
+
+
 class ProjectStore:
     def __init__(self, root_path: str | Path):
         self.root = Path(root_path).expanduser().resolve()
@@ -708,6 +814,7 @@ class ProjectStore:
                    r.player_id, p.name AS player_name,
                    a.identity_id, a.assignment_source, a.touch_time_ms,
                    a.touch_confidence, a.identity_confidence,
+                   a.evidence_json AS identity_evidence_json,
                    a.algorithm_version AS identity_algorithm_version
             FROM candidates c
             LEFT JOIN candidate_reviews r ON r.candidate_id = c.id
@@ -805,12 +912,13 @@ class ProjectStore:
         video_id: str,
         rows: list[Dict[str, Any]],
         before_commit=None,
+        identity_analysis: Dict[str, Any] | None = None,
     ) -> None:
         """替换候选。`before_commit` 在同一个事务里、提交之前调用：它抛异常整个替换回滚。"""
         timestamp = now_iso()
         with self.connect() as connection:
             video_row = connection.execute(
-                "SELECT duration_ms FROM videos WHERE id = ?",
+                "SELECT duration_ms, project_id FROM videos WHERE id = ?",
                 (video_id,),
             ).fetchone()
             if not video_row:
@@ -990,6 +1098,11 @@ class ProjectStore:
                             timestamp,
                         ),
                     )
+            if identity_analysis is not None:
+                _persist_identity_analysis(
+                    connection, video_row["project_id"], rows, identity_analysis,
+                    existing_assignments, matched_old, timestamp,
+                )
             if before_commit is not None:
                 before_commit()
 

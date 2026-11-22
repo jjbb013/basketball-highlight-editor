@@ -20,6 +20,7 @@ from . import __version__, ANALYSIS_ALGORITHM_VERSION
 from .adapters.analysis import (
     apply_rim_checks,
     build_pipeline_commands,
+    build_player_identification_command,
     build_rim_check_command,
     candidate_to_row,
     dedupe_trajectory_matches,
@@ -53,6 +54,8 @@ from .request_control import fingerprint, check_cancelled, begin_commit, set_can
 from .storage import ProjectStore, new_id
 from .media_tools import resolve_media_tool
 from .diagnostics import folder_summary, log_diagnostic, video_summary
+from basketball_highlight.identity_model import LocalIdentityModel
+from basketball_highlight.player_analysis import ALGORITHM_VERSION as PLAYER_IDENTITY_VERSION, identity_model_from_rows
 from basketball_highlight.rim_check import RIM_CHECK_VERSION
 from basketball_highlight.tracking import link_ball_detections
 
@@ -872,6 +875,10 @@ class EngineService:
         return repo_root / "third_party" / "basketball-shot-detection" / "bball_model.pt"
 
     @staticmethod
+    def _default_pose_model_path(repo_root: Path) -> Path:
+        return repo_root / "models" / "yolo11n-pose.pt"
+
+    @staticmethod
     def _parse_ratio(value: Any) -> float | None:
         if not isinstance(value, str) or "/" not in value:
             return None
@@ -1352,6 +1359,7 @@ class EngineService:
             "after_seconds": after_seconds,
             "analysis_start_ms": analysis_start_ms,
             "analysis_end_ms": analysis_end_ms,
+            "player_identity": payload.get("player_identity") is True,
             "algorithm_version": ANALYSIS_ALGORITHM_VERSION,
         }
         store.set_analysis_mode(mode)
@@ -1441,7 +1449,7 @@ class EngineService:
             "mode", "device",
             "sample_fps", "window_seconds", "before_seconds", "after_seconds",
             "proxy_width", "proxy_height", "proxy_fps", "coarse_scale",
-            "refine_scale", "conf", "model_path",
+            "refine_scale", "conf", "model_path", "player_identity",
         ):
             if key in retry_payload:
                 continue
@@ -1785,6 +1793,7 @@ class EngineService:
 
             checkpoint = {
                 "mode": mode,
+                "player_identity": payload.get("player_identity") is True,
                 "analysis_key": analysis_key,
                 "analysis_parameters": analysis_parameters,
                 "proxy_video": str(proxy_video),
@@ -1965,6 +1974,27 @@ class EngineService:
                     "分析完成但未检测到篮球，请扩大 ROI 或检查视频画面",
                     {"detection_counts": detection_counts},
                 )
+            identity_analysis = None
+            if payload.get("player_identity") is True:
+                identity_analysis = self._identify_players(
+                    repo_root=repo_root,
+                    source_video=source_video,
+                    model_path=model_path,
+                    pose_model_path=Path(
+                        payload.get("pose_model_path")
+                        or self._default_pose_model_path(repo_root)
+                    ).expanduser().resolve(),
+                    run_root=run_root,
+                    rows=rows,
+                    source_roi=source_roi,
+                    source_size=[source_width, source_height],
+                    store=store,
+                    on_stage=on_stage,
+                    cancel_event=cancel_event,
+                    job_id=job_id,
+                    pipeline=pipeline,
+                    device=device,
+                )
             store.update_job(
                 job_id,
                 state="running",
@@ -1996,13 +2026,20 @@ class EngineService:
             persist_started = time.perf_counter()
             # 取消检查放进写库事务、提交之前：要么候选和审核继承一起生效，要么整个回滚，
             # 不会留下「新候选已写入却报已取消」的半截状态。
-            store.replace_candidates(video_id, rows, before_commit=abort_if_cancelled)
+            store.replace_candidates(
+                video_id, rows,
+                before_commit=abort_if_cancelled,
+                identity_analysis=identity_analysis,
+            )
             stage_timings_ms["persist_candidates"] = round(
                 (time.perf_counter() - persist_started) * 1000
             )
             checkpoint = {
                 **checkpoint,
                 "candidate_count": len(rows),
+                "identity_counts": pipeline.get("identity_counts", {
+                    "status": "disabled", "auto_assigned": 0, "review": 0,
+                }),
                 "detection_counts": detection_counts,
                 "inference_device": inference_device,
                 "preview_counts": preview_counts,
@@ -2067,6 +2104,141 @@ class EngineService:
                 self._job_threads.pop(job_id, None)
                 self._job_cancel_events.pop(job_id, None)
                 self._job_processes.pop(job_id, None)
+
+    def _identify_players(
+        self,
+        *,
+        repo_root: Path,
+        source_video: Path,
+        model_path: Path,
+        pose_model_path: Path,
+        run_root: Path,
+        rows: list[Dict[str, Any]],
+        source_roi: list[float],
+        source_size: list[int],
+        store: ProjectStore,
+        on_stage,
+        cancel_event: threading.Event | None,
+        job_id: str,
+        pipeline: Dict[str, Any],
+        device: str = "auto",
+    ) -> Dict[str, Any] | None:
+        """Run optional same-game attribution without risking basketball candidates.
+
+        Only numeric local prototypes cross the process boundary. Names stay in
+        the private project database. Missing models or inference failures leave
+        all candidates available for ordinary manual review.
+        """
+        started = time.perf_counter()
+        pipeline.setdefault("logs", [])
+        try:
+            if not rows:
+                return None
+            if not pose_model_path.is_file():
+                pipeline["identity_counts"] = {
+                    "status": "model_unavailable", "auto_assigned": 0, "review": len(rows),
+                }
+                pipeline["logs"].append(f"identify_players: model not found: {pose_model_path}")
+                on_stage("identify_players", 0.94)
+                return None
+            inputs = []
+            for row in rows:
+                evidence = json.loads(row.get("evidence_json") or "{}")
+                if not isinstance(evidence, dict):
+                    raise ValueError("IDENTITY_CANDIDATE_EVIDENCE_INVALID")
+                inputs.append({
+                    "id": str(row["id"]),
+                    "time": int(row["event_time_ms"]) / 1000,
+                    "source_size": source_size,
+                    "evidence": evidence,
+                })
+            initial_model = identity_model_from_rows(store.list_identities()).to_dict()
+            key_payload = {
+                "version": PLAYER_IDENTITY_VERSION,
+                "candidates": inputs,
+                "model": initial_model,
+                "ball_model": {"path": str(model_path), "mtime_ns": model_path.stat().st_mtime_ns},
+                "pose_sha256": hashlib.sha256(pose_model_path.read_bytes()).hexdigest(),
+                "roi": source_roi,
+            }
+            key = hashlib.sha256(
+                json.dumps(key_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()[:16]
+            input_path = run_root / f"identity_{key}.input.json"
+            output_path = run_root / f"identity_{key}.json"
+            try:
+                output = json.loads(output_path.read_text(encoding="utf-8"))
+                self._validate_identity_output(output, {str(row["id"]) for row in rows})
+                pipeline["cache_hits"] = pipeline.get("cache_hits", 0) + 1
+                on_stage("identify_players", 0.94)
+            except (OSError, ValueError, LookupError):
+                output = None
+            if output is None:
+                run_root.mkdir(parents=True, exist_ok=True)
+                input_path.write_text(
+                    json.dumps({"candidates": inputs, "model": initial_model}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                checked = run_pipeline(
+                    [build_player_identification_command(
+                        repo_root, source_video, model_path, pose_model_path,
+                        input_path, output_path, source_roi, device=device,
+                    )],
+                    output_path,
+                    on_stage,
+                    cancel_check=cancel_event.is_set if cancel_event else None,
+                    process_callback=lambda process: self._set_job_process(job_id, process),
+                    stage_names=("identify_players",),
+                    stage_ranges=((0.88, 0.94),),
+                )
+                output = checked["refined"]
+                self._validate_identity_output(output, {str(row["id"]) for row in rows})
+                pipeline["logs"].extend(checked["logs"])
+            results = output["results"]
+            assigned = sum(
+                not result["needs_review"] and result["identity"].get("identity_id") is not None
+                for result in results.values()
+            )
+            pipeline["identity_counts"] = {
+                "status": "completed", "auto_assigned": assigned, "review": len(rows) - assigned,
+            }
+            return {"model": output["model"], "results": results}
+        except PipelineCancelled:
+            raise
+        except Exception as exc:
+            pipeline["identity_counts"] = {
+                "status": "failed", "auto_assigned": 0, "review": len(rows),
+            }
+            pipeline["logs"].append(f"identify_players: {exc}")
+            log_diagnostic(f"analysis job={job_id} identify_players: {exc}")
+            on_stage("identify_players", 0.94)
+            return None
+        finally:
+            pipeline.setdefault("stage_timings_ms", {})["identify_players"] = round(
+                (time.perf_counter() - started) * 1000
+            )
+
+    @staticmethod
+    def _validate_identity_output(output: Dict[str, Any], candidate_ids: set[str]) -> None:
+        if not isinstance(output, dict) or output.get("schema_version") != 1:
+            raise ValueError("IDENTITY_ANALYSIS_INVALID")
+        if output.get("algorithm_version") != PLAYER_IDENTITY_VERSION:
+            raise ValueError("IDENTITY_ALGORITHM_VERSION_MISMATCH")
+        model = LocalIdentityModel.from_dict(output.get("model", {}))
+        results = output.get("results")
+        if not isinstance(results, dict) or set(results) != candidate_ids:
+            raise ValueError("IDENTITY_ANALYSIS_INCOMPLETE")
+        for result in results.values():
+            if not isinstance(result, dict) or not isinstance(result.get("needs_review"), bool):
+                raise ValueError("IDENTITY_ANALYSIS_INVALID")
+            identity = result.get("identity")
+            if not isinstance(identity, dict):
+                raise ValueError("IDENTITY_ANALYSIS_INVALID")
+            identity_id = identity.get("identity_id")
+            # Reviewable new identities also need a persisted prototype so a
+            # later name confirmation and the next analysis can reuse them.
+            if identity_id is not None and identity_id not in model.prototypes:
+                raise LookupError("IDENTITY_NOT_FOUND")
 
     def _verify_rim_crossings(
         self,

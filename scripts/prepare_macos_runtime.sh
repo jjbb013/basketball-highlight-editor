@@ -49,6 +49,14 @@ if [[ ! -f "$MODEL" ]]; then
   exit 2
 fi
 
+POSE_MODEL="${BHE_POSE_MODEL:-$ROOT/models/yolo11n-pose.pt}"
+POSE_SHA256="${BHE_POSE_SHA256:-869e83fcdffdc7371fa4e34cd8e51c838cc729571d1635e5141e3075e9319dc0}"
+if [[ ! -f "$POSE_MODEL" ]]; then
+  echo "Pose model not found; use the pinned models/yolo11n-pose.pt or set BHE_POSE_MODEL" >&2
+  exit 2
+fi
+printf '%s  %s\n' "$POSE_SHA256" "$POSE_MODEL" | shasum -a 256 --check
+
 rm -rf "$OUT"
 mkdir -p "$OUT"/bin "$OUT"/python "$OUT"/engine "$OUT"/scripts "$OUT"/src "$OUT"/docs/architecture "$OUT"/models
 
@@ -58,7 +66,11 @@ cp -R "$ROOT/scripts"/. "$OUT/scripts/"
 cp -R "$ROOT/src"/. "$OUT/src/"
 cp -R "$ROOT/assets" "$OUT/assets/"
 cp "$ROOT/docs/architecture/SQLITE_SCHEMA_V1.sql" "$OUT/docs/architecture/"
+cp "$ROOT/NOTICE" "$ROOT/docs/THIRD_PARTY_NOTICES.md" "$ROOT/docs/MODEL_AND_DATA_LICENSES.md" "$OUT/docs/"
+cp -R "$ROOT/docs/licenses" "$OUT/docs/licenses/"
+cp "$ROOT/models/README.md" "$OUT/models/README.md"
 cp "$MODEL" "$OUT/models/bball_model.pt"
+cp "$POSE_MODEL" "$OUT/models/yolo11n-pose.pt"
 # CoreML 用的静态 batch=1 模型是可选的:构建时导出过就一起打包,
 # 没有就只保留 Metal/CPU 路径(引擎会在缺文件时自动降级,不会报错)。
 STATIC_ONNX="${BHE_STATIC_ONNX:-${MODEL%.*}.static.onnx}"

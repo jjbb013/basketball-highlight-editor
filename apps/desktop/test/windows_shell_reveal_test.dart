@@ -6,13 +6,13 @@ void main() {
   group('normalizeWindowsShellPath', () {
     test('正斜杠全部替换为反斜杠', () {
       expect(
-        normalizeWindowsShellPath('C:/Users/Jafir/exports'),
-        r'C:\Users\Jafir\exports',
+        normalizeWindowsShellPath('C:/exports/highlights'),
+        r'C:\exports\highlights',
       );
     });
 
     test('反斜杠路径保持不变', () {
-      expect(normalizeWindowsShellPath(r'C:\Users\Jafir'), r'C:\Users\Jafir');
+      expect(normalizeWindowsShellPath(r'C:\exports'), r'C:\exports');
     });
 
     test('UNC 正斜杠前缀正确转换', () {

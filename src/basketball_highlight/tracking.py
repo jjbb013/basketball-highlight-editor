@@ -13,6 +13,7 @@ def link_ball_detections(
     start_time: float | None = None,
     end_time: float | None = None,
     max_gap_seconds: float = 0.6,
+    max_speed_increase: float = 3.0,
 ) -> list[dict[str, float]]:
     """Link one ball per sampled frame around a known candidate point.
 
@@ -60,6 +61,7 @@ def link_ball_detections(
     def extend(times: Iterable[float]) -> list[dict[str, float]]:
         linked: list[dict[str, float]] = []
         previous = anchor_point
+        previous_delta: tuple[float, float] | None = None
         for frame_time in times:
             gap = abs(frame_time - previous["time"])
             if gap <= 1e-6:
@@ -76,10 +78,22 @@ def link_ball_detections(
                 return distance, point["x"], point["y"]
 
             nearest = min(frame_candidates[frame_time], key=rank)
-            if rank(nearest)[0] > gate:
+            distance = rank(nearest)[0]
+            if distance > gate:
                 continue
+            delta = (nearest["x"] - previous["x"], nearest["y"] - previous["y"])
+            if previous_delta is not None:
+                # Bounces can abruptly change speed and reverse direction. Only
+                # reject acceleration in the same general direction; do not use
+                # a single free-flight model across a collision.
+                same_direction = delta[0] * previous_delta[0] + delta[1] * previous_delta[1] > 0
+                if same_direction and distance > max_speed_increase * max(math.hypot(*previous_delta), 1e-6):
+                    # A missed detection must not turn a distant ball into the
+                    # next trajectory anchor. Keep supported motion unchanged.
+                    continue
             linked.append(nearest)
             previous = nearest
+            previous_delta = delta
         return linked
 
     earlier_times = sorted(

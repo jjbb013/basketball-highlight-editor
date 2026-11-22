@@ -135,8 +135,10 @@ def _zone_signal(gray, hsv, background_gray):
 def scan_window(
     model, video, roi, center_time, window, sample_fps, scale, conf, device,
     rim=None, batch=8, start_time_override=None, end_time_override=None,
-    net_roi=None,
+    net_roi=None, pose_detector=None, pose_conf=0.25, pose_imgsz=960,
+    person_ball_crops=False,
 ):
+    from basketball_highlight.player_analysis import person_ball_roi
     x1, y1, x2, y2 = roi
     crop_scale = effective_crop_scale(roi, scale)
     # Troubleshooting-only escape hatch back to the pre-clamp behaviour.  Not
@@ -194,13 +196,41 @@ def scan_window(
         signal_x1 = signal_x2 = signal_y1 = signal_y2 = 0
 
     pending_crops = []
+    pending_frames = []
     pending_meta = []
 
     def flush_batch():
-        if not pending_crops:
+        if not pending_meta:
             return
+        people_by_frame = [[] for _ in pending_meta]
+        if pose_detector is not None:
+            people_by_frame = pose_detector.predict_batch(
+                list(pending_frames),
+                [round(meta["time"] * 1000) for meta in pending_meta],
+                device=device,
+                conf=pose_conf,
+                imgsz=pose_imgsz,
+                batch=batch,
+            )
+            if len(people_by_frame) != len(pending_meta):
+                raise RuntimeError("POSE_FRAME_COUNT_MISMATCH")
+        prediction_crops = list(pending_crops)
+        regions = [[(x1, y1, crop_scale)] for _ in pending_meta]
+        if person_ball_crops:
+            for index, (frame, people) in enumerate(zip(pending_frames, people_by_frame)):
+                for person in people:
+                    region = person_ball_roi(person["bbox"], frame.shape[1], frame.shape[0])
+                    if region is None:
+                        continue
+                    left, top, right, bottom = region
+                    crop = frame[top:bottom, left:right]
+                    local_scale = effective_crop_scale(region, scale)
+                    if local_scale != 1:
+                        crop = cv2.resize(crop, None, fx=local_scale, fy=local_scale, interpolation=cv2.INTER_CUBIC)
+                    prediction_crops.append(crop)
+                    regions[index].append((left, top, local_scale))
         predictions = model.predict(
-            pending_crops,
+            prediction_crops,
             device=device,
             conf=conf,
             iou=0.7,
@@ -212,31 +242,39 @@ def scan_window(
             batch=batch,
             verbose=False,
         )
-        for meta, result in zip(pending_meta, predictions):
+        prediction_index = 0
+        for meta, people, frame_regions in zip(pending_meta, people_by_frame, regions):
             detections = []
-            for box in result.boxes:
-                class_index = int(box.cls[0])
-                name = result.names[class_index]
-                if name not in {"ball", "hoop"}:
-                    continue
-                bx1, by1, bx2, by2 = box.xyxy[0].tolist()
-                coords = [
-                    x1 + bx1 / crop_scale,
-                    y1 + by1 / crop_scale,
-                    x1 + bx2 / crop_scale,
-                    y1 + by2 / crop_scale,
-                ]
-                detections.append({
-                    "name": name,
-                    "confidence": round(float(box.conf[0]), 4),
-                    "center": [
-                        round((coords[0] + coords[2]) / 2, 2),
-                        round((coords[1] + coords[3]) / 2, 2),
-                    ],
-                    "xyxy": [round(value, 2) for value in coords],
-                })
-            records.append({**meta, "detections": detections})
+            for left, top, local_scale in frame_regions:
+                result = predictions[prediction_index]
+                prediction_index += 1
+                for box in result.boxes:
+                    class_index = int(box.cls[0])
+                    name = result.names[class_index]
+                    if name not in {"ball", "hoop"}:
+                        continue
+                    bx1, by1, bx2, by2 = box.xyxy[0].tolist()
+                    coords = [
+                        left + bx1 / local_scale,
+                        top + by1 / local_scale,
+                        left + bx2 / local_scale,
+                        top + by2 / local_scale,
+                    ]
+                    detections.append({
+                        "name": name,
+                        "confidence": round(float(box.conf[0]), 4),
+                        "center": [
+                            round((coords[0] + coords[2]) / 2, 2),
+                            round((coords[1] + coords[3]) / 2, 2),
+                        ],
+                        "xyxy": [round(value, 2) for value in coords],
+                    })
+            record = {**meta, "detections": detections}
+            if pose_detector is not None:
+                record["people"] = people
+            records.append(record)
         pending_crops.clear()
+        pending_frames.clear()
         pending_meta.clear()
 
     while sample_index < len(target_frames):
@@ -327,6 +365,8 @@ def scan_window(
             crop = cv2.resize(crop, None, fx=crop_scale, fy=crop_scale,
                               interpolation=cv2.INTER_CUBIC)
         pending_crops.append(crop)
+        if pose_detector is not None:
+            pending_frames.append(frame)
         pending_meta.append({
             "frame": frame_index,
             "time": sample_times[sample_index],

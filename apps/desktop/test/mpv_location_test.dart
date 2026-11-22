@@ -20,8 +20,8 @@ void main() {
 
     test('Windows 盘符路径维持 file:// URI(本地视频验证过的形式)', () {
       expect(
-        mpvLocationFor(r'C:\Users\Jafir\视频\比赛.mp4', isWindows: true),
-        Uri.file(r'C:\Users\Jafir\视频\比赛.mp4').toString(),
+        mpvLocationFor(r'C:\视频\比赛.mp4', isWindows: true),
+        Uri.file(r'C:\视频\比赛.mp4').toString(),
       );
     });
 

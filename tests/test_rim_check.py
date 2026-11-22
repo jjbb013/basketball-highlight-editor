@@ -40,6 +40,16 @@ def test_ball_hidden_by_net_while_passing_the_rim_is_a_make():
     assert result["hidden_frames"] == 2
 
 
+def test_made_basket_exposes_source_ball_path_for_player_attribution():
+    times = [10.0 + index / 30 for index in range(16)]
+    result = assess_rim_crossing(fall(hidden={6, 7}), RIM, frame_times=times)
+    path = result["trajectory"]
+    assert path[0] == {"time": 10.0, "x": 515.0, "y": 225.0}
+    assert path[-1]["time"] == times[-1]
+    assert path[-1]["y"] == 412.5
+    assert len(path) == 14
+
+
 def test_ball_that_stays_fully_visible_fell_in_front_of_the_rim():
     result = assess_rim_crossing(fall(), RIM)
     assert result["status"] == "rejected"

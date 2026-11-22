@@ -54,7 +54,8 @@ def undeclared_modules(modules, requirements):
     # Ultralytics declares torch itself; the checkpoint additionally needs dill.
     if 'ultralytics' in declared:
         declared.add('torch')
-    return modules - sys.stdlib_module_names - declared
+    # Python 2's pickle module name is not an installable Python 3 dependency.
+    return modules - sys.stdlib_module_names - declared - {'__builtin__'}
 
 
 @pytest.mark.parametrize('protocol', range(pickle.HIGHEST_PROTOCOL + 1))
@@ -66,6 +67,11 @@ def test_scanner_handles_global_stack_global_and_memo_reuse(protocol):
 def test_developer_installed_dependency_does_not_hide_missing_declaration():
     assert undeclared_modules({'dill', 'torch', 'ultralytics', 'collections'},
                               'ultralytics>=8.4,<9') == {'dill'}
+
+
+def test_python2_builtin_alias_is_not_a_missing_python3_package():
+    # Official YOLO Pose checkpoints contain this legacy serialized name.
+    assert undeclared_modules({'__builtin__'}, '') == set()
 
 
 def test_packaged_checkpoint_dependencies_are_declared():

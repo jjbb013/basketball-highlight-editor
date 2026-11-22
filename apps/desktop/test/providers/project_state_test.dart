@@ -1276,6 +1276,67 @@ void main() {
       expect(container.read(projectProvider).busy, isFalse);
     });
 
+    test('一次身份命名刷新同身份自动候选，但保留人工改派', () async {
+      final session = _FakeProjectSession()
+        ..seedCandidates([
+          {
+            'id': 'c1',
+            'identity_id': 'identity-1',
+            'assignment_source': 'automatic',
+          },
+          {
+            'id': 'c2',
+            'identity_id': 'identity-1',
+            'assignment_source': 'manual',
+          },
+        ]);
+      final container = playerContainer(session);
+      final notifier = container.read(projectProvider.notifier);
+      await notifier.refreshCandidates();
+
+      final updated = await notifier.nameIdentity('identity-1', 'Will');
+
+      expect(updated, 1);
+      expect(session.nameIdentityCalls, [('identity-1', 'Will')]);
+      expect(session.listCandidatesCalls, 2);
+      expect(
+        container.read(projectProvider).candidates[0]['player_name'],
+        'Will',
+      );
+      expect(
+        container.read(projectProvider).candidates[1]['player_name'],
+        isNull,
+      );
+      expect(container.read(projectProvider).players.single['name'], 'Will');
+    });
+
+    test('身份命名失败时不乐观修改本地标签', () async {
+      final session = _FakeProjectSession()
+        ..seedCandidates([
+          {
+            'id': 'c1',
+            'identity_id': 'identity-1',
+            'assignment_source': 'automatic',
+          },
+        ])
+        ..throwOnNameIdentity = true;
+      final container = playerContainer(session);
+      final notifier = container.read(projectProvider.notifier);
+      await notifier.refreshCandidates();
+
+      expect(await notifier.nameIdentity('identity-1', 'Will'), 0);
+      expect(
+        container.read(projectProvider).candidates.single['player_name'],
+        isNull,
+      );
+      expect(container.read(projectProvider).players, isEmpty);
+      expect(session.listCandidatesCalls, 1);
+      expect(
+        container.read(noticeProvider).last.severity,
+        NoticeSeverity.error,
+      );
+    });
+
     test('单个标签仅局部更新，保留片段及缩略图信息', () async {
       final session = _FakeProjectSession()
         ..seedCandidates([
@@ -1602,6 +1663,27 @@ class _FakeProjectSession extends ProjectSession {
     return {'updated': true};
   }
 
+  final List<(String, String)> nameIdentityCalls = <(String, String)>[];
+  bool throwOnNameIdentity = false;
+
+  @override
+  Future<JsonMap> nameIdentity(String identityId, String playerName) async {
+    nameIdentityCalls.add((identityId, playerName));
+    if (throwOnNameIdentity) throw StateError('identity naming failed');
+    final player = <String, dynamic>{'id': 'p-will', 'name': playerName};
+    players = [player];
+    var updated = 0;
+    for (final candidate in _candidates) {
+      if (candidate['identity_id'] == identityId &&
+          candidate['assignment_source'] != 'manual') {
+        candidate['player_id'] = player['id'];
+        candidate['player_name'] = playerName;
+        updated++;
+      }
+    }
+    return {'player': player, 'updated_candidates': updated};
+  }
+
   final List<JsonMap> _candidates = <JsonMap>[];
   List<JsonMap> players = <JsonMap>[];
   List<JsonMap> reviewHistory = <JsonMap>[];
@@ -1752,6 +1834,7 @@ class _FakeProjectSession extends ProjectSession {
     int? proxyHeight,
     double? proxyFps,
     String? modelPath,
+    bool playerIdentity = true,
   }) async {
     startAnalysisCalls++;
     lastStartBeforeSeconds = beforeSeconds;
@@ -1773,6 +1856,7 @@ class _FakeProjectSession extends ProjectSession {
     int? proxyHeight,
     double? proxyFps,
     String? modelPath,
+    bool? playerIdentity,
   }) async {
     retryAnalysisCalls.add(jobId);
     lastRetryMode = mode;
