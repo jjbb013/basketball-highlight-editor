@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = BHE
+PRODUCT_NAME = BHE Pro
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.courtside.highlighteditor
+PRODUCT_BUNDLE_IDENTIFIER = com.courtside.bhepro
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 BHE (basketball-highlight-editor). All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 BHE Pro (basketball-highlight-editor). All rights reserved.
