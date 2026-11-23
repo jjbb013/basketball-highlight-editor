@@ -1,5 +1,6 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
+
 import 'bhe_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -107,7 +108,9 @@ class BheLocalizationsEn extends BheLocalizations {
       'No mail client is available. Please contact the feedback email manually.';
 
   @override
-  String get about => 'About BHE';
+  String about(String appName) {
+    return 'About $appName';
+  }
 
   @override
   String get backToProject => 'Back to project';
@@ -131,7 +134,9 @@ class BheLocalizationsEn extends BheLocalizations {
   String get taskInProgress => 'Task in progress';
 
   @override
-  String get confirmExit => 'Exit BHE?';
+  String confirmExit(String appName) {
+    return 'Exit $appName?';
+  }
 
   @override
   String get cancelTaskAndExit => 'Cancel task and exit';
@@ -874,6 +879,11 @@ class BheLocalizationsEn extends BheLocalizations {
 
   @override
   String get homeDropActive => 'Release to create a project';
+
+  @override
+  String updateMacInstallInstructions(String appName) {
+    return 'Download complete. Quit $appName, open the installer, drag $appName into Applications to replace the old version, then reopen it. Projects are stored elsewhere and will not be lost.';
+  }
 
   @override
   String get homeDropUnsupported =>

@@ -29,7 +29,9 @@ def test_helper_and_guide_never_target_original_bhe():
 
 
 @pytest.mark.skipif(os.name == 'nt', reason='macOS packaging uses Bash')
-def test_build_packages_space_named_app_with_isolated_fake_tools(tmp_path):
+def test_build_packages_space_named_app_with_isolated_fake_tools(tmp_path, monkeypatch):
+    for key in ('BHE_APP_NAME', 'BHE_SKIP_PACKAGE', 'BHE_SKIP_DMG', 'BHE_CODESIGN_IDENTITY'):
+        monkeypatch.setenv(key, 'polluted-external-value')
     tools = tmp_path / 'tools'
     tools.mkdir()
     calls = tmp_path / 'calls'
@@ -66,22 +68,24 @@ def test_build_packages_space_named_app_with_isolated_fake_tools(tmp_path):
     for tool in (flutter, hdiutil):
         tool.chmod(0o755)
     output = tmp_path / 'output with spaces/BHE-Pro-test.dmg'
+    polluted_keys = {'BHE_APP_NAME', 'BHE_SKIP_PACKAGE', 'BHE_SKIP_DMG', 'BHE_CODESIGN_IDENTITY'}
+    env = {key: value for key, value in os.environ.items() if key not in polluted_keys}
+    env.update({
+        'PATH': f'{tools}:{os.environ["PATH"]}',
+        'CALL_LOG': str(calls),
+        'FLUTTER_BIN': str(flutter),
+        'BHE_APP_DIR': str(app_dir),
+        'BHE_RUNTIME_OUT': str(runtime),
+        'BHE_SKIP_RUNTIME_PREPARE': '1',
+        'BHE_BUILD_NAME': '0.1.16-macos.3',
+        'BHE_BUILD_NUMBER': '3',
+        'BHE_ARCH': 'arm64',
+        'BHE_DMG_OUT': str(output),
+        'TMPDIR': str(tmp_path),
+    })
     result = subprocess.run(
         ['bash', str(BUILD)],
-        env={
-            **os.environ,
-            'PATH': f'{tools}:{os.environ["PATH"]}',
-            'CALL_LOG': str(calls),
-            'FLUTTER_BIN': str(flutter),
-            'BHE_APP_DIR': str(app_dir),
-            'BHE_RUNTIME_OUT': str(runtime),
-            'BHE_SKIP_RUNTIME_PREPARE': '1',
-            'BHE_BUILD_NAME': '0.1.16-macos.3',
-            'BHE_BUILD_NUMBER': '3',
-            'BHE_ARCH': 'arm64',
-            'BHE_DMG_OUT': str(output),
-            'TMPDIR': str(tmp_path),
-        },
+        env=env,
         capture_output=True,
         text=True,
     )

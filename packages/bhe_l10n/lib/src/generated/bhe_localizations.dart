@@ -281,8 +281,8 @@ abstract class BheLocalizations {
   /// No description provided for @about.
   ///
   /// In zh, this message translates to:
-  /// **'关于 BHE'**
-  String get about;
+  /// **'关于 {appName}'**
+  String about(String appName);
 
   /// No description provided for @backToProject.
   ///
@@ -329,8 +329,8 @@ abstract class BheLocalizations {
   /// No description provided for @confirmExit.
   ///
   /// In zh, this message translates to:
-  /// **'退出 BHE？'**
-  String get confirmExit;
+  /// **'退出 {appName}？'**
+  String confirmExit(String appName);
 
   /// No description provided for @cancelTaskAndExit.
   ///
@@ -1645,6 +1645,12 @@ abstract class BheLocalizations {
   /// In zh, this message translates to:
   /// **'松开即可新建项目'**
   String get homeDropActive;
+
+  /// No description provided for @updateMacInstallInstructions.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载完成。退出 {appName}，打开安装包把 {appName} 拖进「应用程序」替换旧版本，再重新打开。项目保存在别的位置，不会丢。'**
+  String updateMacInstallInstructions(String appName);
 
   /// No description provided for @homeDropUnsupported.
   ///

@@ -155,7 +155,8 @@ class _CourtsideAppState extends ConsumerState<CourtsideApp>
           title: Text(
             busy
                 ? (l10n?.taskInProgress ?? '任务仍在进行')
-                : (l10n?.confirmExit ?? '退出 ${appDisplayName()}？'),
+                : (l10n?.confirmExit(appDisplayName()) ??
+                      '退出 ${appDisplayName()}？'),
           ),
           content: Text(
             busy

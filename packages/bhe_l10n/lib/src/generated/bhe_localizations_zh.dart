@@ -1,5 +1,6 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
+
 import 'bhe_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -103,7 +104,9 @@ class BheLocalizationsZh extends BheLocalizations {
   String get feedbackMailClientMissing => '未找到可用的邮件客户端，请手动联系反馈邮箱。';
 
   @override
-  String get about => '关于 BHE';
+  String about(String appName) {
+    return '关于 $appName';
+  }
 
   @override
   String get backToProject => '返回项目';
@@ -127,7 +130,9 @@ class BheLocalizationsZh extends BheLocalizations {
   String get taskInProgress => '任务仍在进行';
 
   @override
-  String get confirmExit => '退出 BHE？';
+  String confirmExit(String appName) {
+    return '退出 $appName？';
+  }
 
   @override
   String get cancelTaskAndExit => '取消任务并退出';
@@ -843,6 +848,11 @@ class BheLocalizationsZh extends BheLocalizations {
 
   @override
   String get homeDropActive => '松开即可新建项目';
+
+  @override
+  String updateMacInstallInstructions(String appName) {
+    return '下载完成。退出 $appName，打开安装包把 $appName 拖进「应用程序」替换旧版本，再重新打开。项目保存在别的位置，不会丢。';
+  }
 
   @override
   String get homeDropUnsupported => '不支持这个文件，请拖入 MP4、MOV、M4V、AVI 或 MKV 视频';

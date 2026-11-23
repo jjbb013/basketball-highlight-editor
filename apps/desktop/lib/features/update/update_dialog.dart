@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/app_identity.dart';
 import '../../providers/project_state.dart';
 import '../../providers/update_provider.dart';
 import '../../theme/app_colors.dart';
@@ -192,11 +193,12 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
         case UpdateStatus.ready:
           body.add(
             Text(
-              context.bheText(
-                canInstall
-                    ? '下载完成。安装更新会保存当前项目、退出 BHE 并在更新后重新打开。旧版本会保留在原文件夹旁。'
-                    : '下载完成。退出 BHE，打开安装包把 BHE 拖进「应用程序」替换旧版本，再重新打开。项目保存在别的位置，不会丢。',
-              ),
+              canInstall
+                  ? context.bheText(
+                      '下载完成。安装更新会保存当前项目、退出 BHE 并在更新后重新打开。旧版本会保留在原文件夹旁。',
+                    )
+                  : l10n?.updateMacInstallInstructions(appDisplayName()) ??
+                        '下载完成。退出 ${appDisplayName()}，打开安装包把 ${appDisplayName()} 拖进「应用程序」替换旧版本，再重新打开。项目保存在别的位置，不会丢。',
               style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
             ),
           );

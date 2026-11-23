@@ -29,22 +29,17 @@ void main() {
     await container.read(themeModeProvider.notifier).set(ThemeMode.light);
     await container.read(themeModeProvider.notifier).set(ThemeMode.light);
     final initialLocale = container.read(appLocaleProvider);
-    final switchedTo = BheLocale.fromName(
-      initialLocale.toLanguageTag(),
-    ) == BheLocale.en
+    final switchedTo =
+        BheLocale.fromName(initialLocale.toLanguageTag()) == BheLocale.en
         ? 'zh-CN'
         : 'en-US';
-    await container.read(
-      appLocaleProvider.notifier,
-    ).set(Locale(switchedTo.split('-')[0], switchedTo.split('-')[1]));
+    await container
+        .read(appLocaleProvider.notifier)
+        .set(Locale(switchedTo.split('-')[0], switchedTo.split('-')[1]));
 
     final log = readLog();
     expect(log, contains('[info] [settings] 切换主题 light'));
-    expect(
-      '切换主题'.allMatches(log).length,
-      1,
-      reason: '主题没变时不重复记',
-    );
+    expect('切换主题'.allMatches(log).length, 1, reason: '主题没变时不重复记');
     expect(log, contains('[info] [settings] 切换语言 $switchedTo'));
     expect(log, isNot(contains('user')));
     expect(log, isNot(contains('/Users/')));
@@ -110,7 +105,8 @@ class _FakeUpdateService extends UpdateService {
 
 class _FailingUpdateService extends UpdateService {
   @override
-  Future<UpdateManifest> fetch() async => throw const UpdateException('连不上更新服务器');
+  Future<UpdateManifest> fetch() async =>
+      throw const UpdateException('连不上更新服务器');
 }
 
 ProviderContainer _containerOf(UpdateService service, String current) {
@@ -118,6 +114,7 @@ ProviderContainer _containerOf(UpdateService service, String current) {
     overrides: [
       updateServiceProvider.overrideWithValue(service),
       appVersionProvider.overrideWithValue(current),
+      updateChecksEnabledProvider.overrideWithValue(true),
     ],
   );
   addTearDown(container.dispose);

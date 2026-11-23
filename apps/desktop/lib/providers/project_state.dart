@@ -24,6 +24,10 @@ import '../core/draft_flush_registry.dart';
 
 const recentProjectRootsPrefsKey = 'basketball_recent_project_roots';
 
+final defaultProjectsRootProvider = Provider<String>(
+  (_) => defaultProjectsRoot(Platform.environment),
+);
+
 /// 项目显示名的长度上限。只约束数据库里的 name，不影响磁盘目录名。
 const projectNameMaxLength = 60;
 
@@ -3407,19 +3411,13 @@ class ProjectNotifier extends Notifier<ProjectState> {
         );
   }
 
-  /// 等价 app.dart:_projectsRoot(76)。env BHE_PROJECTS_ROOT > knownProjectsRoot >
-  /// $HOME/Movies/BasketballProjects（Windows 用 Videos）。
+  /// env BHE_PROJECTS_ROOT > knownProjectsRoot > 平台默认目录。
   String get _projectsRoot {
     final configured = Platform.environment['BHE_PROJECTS_ROOT'];
     if (configured != null && configured.trim().isNotEmpty) return configured;
     final current = state.knownProjectsRoot;
     if (current != null && current.isNotEmpty) return current;
-    if (Platform.isWindows) {
-      final profile = Platform.environment['USERPROFILE'];
-      return '${profile ?? Directory.current.path}/Videos/BasketballProjects';
-    }
-    final home = Platform.environment['HOME'];
-    return '${home ?? Directory.current.path}/Movies/BasketballProjects';
+    return ref.read(defaultProjectsRootProvider);
   }
 
   Future<List<String>> _recentProjectRoots() async {

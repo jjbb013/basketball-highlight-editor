@@ -21,6 +21,45 @@ import 'package:desktop/providers/session_provider.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  group('macOS BHE Pro 独立项目目录', () {
+    const root = '/Users/test/Library/Application Support/BHE Pro/Projects';
+
+    test('正常创建项目使用 Application Support/BHE Pro/Projects', () async {
+      final fake = _FakeProjectSession();
+      final container = ProviderContainer(
+        overrides: <Override>[
+          projectSessionProvider.overrideWithValue(fake),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+          defaultProjectsRootProvider.overrideWithValue(root),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(projectProvider.notifier)
+          .selectVideo('/path/sample.mp4');
+
+      expect(fake.createdProjectRoots.single, startsWith('$root/sample-'));
+    });
+
+    test('首页最近项目扫描使用同一独立目录', () async {
+      final fake = _RootRecordingProjectSession();
+      final container = ProviderContainer(
+        overrides: <Override>[
+          projectSessionProvider.overrideWithValue(fake),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+          defaultProjectsRootProvider.overrideWithValue(root),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(projectProvider.notifier).loadRecentProjects();
+
+      expect(fake.recentRoots, [root]);
+    });
+  });
+
   test('将 ROI 后端错误转换成可操作提示', () {
     expect(
       userFacingNotice(
@@ -109,6 +148,10 @@ void main() {
         overrides: <Override>[
           projectSessionProvider.overrideWithValue(session),
           engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+          // 备用目录用例需要一个与 fallback 不同的显式默认根。
+          defaultProjectsRootProvider.overrideWithValue(
+            '/test/Movies/BasketballProjects',
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -2138,5 +2181,18 @@ class _IntermittentPreferences extends InMemorySharedPreferencesStore {
     attempts++;
     if (fail) throw StateError('temporary preferences failure');
     return super.getAll();
+  }
+}
+
+class _RootRecordingProjectSession extends _FakeProjectSession {
+  final recentRoots = <String>[];
+
+  @override
+  Future<List<JsonMap>> loadRecentProjects({
+    required String knownRoot,
+    int limit = 20,
+  }) async {
+    recentRoots.add(knownRoot);
+    return super.loadRecentProjects(knownRoot: knownRoot, limit: limit);
   }
 }

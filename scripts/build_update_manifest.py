@@ -130,6 +130,8 @@ def release_notes(readme: Path, version: str) -> str:
 
 
 def package_entries(assets_dir: Path, version: str, base_url: str, android_base_url: str) -> dict:
+    if any(path.is_file() and path.name.startswith('BHE-Pro-macos-') for path in assets_dir.iterdir()):
+        raise ValueError('BHE Pro/macOS 新资产禁止进入旧更新通道')
     packages = {}
     for platform, suffix in PLATFORMS.items():
         decoration = r'(?:-adhoc)?' if suffix == '.dmg' else r'(?:-debug-signed)?' if suffix == '.apk' else ''

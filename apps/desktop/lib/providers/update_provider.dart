@@ -110,6 +110,10 @@ final updateServiceProvider = Provider<UpdateService>(
   (_) => const UpdateService(),
 );
 
+/// BHE Pro 尚无独立更新通道；macOS 必须关闭检查，不能消费原版 latest.json。
+/// 测试显式注入 true 以覆盖其他平台既有的更新逻辑。
+final updateChecksEnabledProvider = Provider<bool>((_) => !Platform.isMacOS);
+
 /// Kept injectable so tests never close the real window or engine.
 class UpdateLifecycle {
   const UpdateLifecycle({
@@ -156,6 +160,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
 
   /// 手动检查时不理会「跳过这个版本」。
   Future<void> check({bool manual = false}) async {
+    if (!ref.read(updateChecksEnabledProvider)) return;
     if (state.status == UpdateStatus.checking ||
         state.status == UpdateStatus.downloading ||
         state.status == UpdateStatus.installing) {
@@ -198,6 +203,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
 
   /// 启动后自动检查，一天最多一次；开发版不检查。返回是否发现了新版本。
   Future<bool> autoCheck() async {
+    if (!ref.read(updateChecksEnabledProvider)) return false;
     final current = ref.read(appVersionProvider);
     if (compareVersions(current, current) == null) return false;
     final prefs = await SharedPreferences.getInstance();

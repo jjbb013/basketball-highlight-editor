@@ -13,6 +13,23 @@ String canonicalProjectPath(String path) {
   }
 }
 
+/// 正常新建和首页扫描的默认项目目录；显式环境覆盖仍由 ProjectNotifier 处理。
+String defaultProjectsRoot(
+  Map<String, String> env, {
+  bool? isWindows,
+  bool? isMacOS,
+}) {
+  if (isWindows ?? Platform.isWindows) {
+    final profile = env['USERPROFILE'];
+    return '${profile ?? Directory.current.path}/Videos/BasketballProjects';
+  }
+  final home = env['HOME'] ?? Directory.current.path;
+  if (isMacOS ?? Platform.isMacOS) {
+    return '$home/Library/Application Support/BHE Pro/Projects';
+  }
+  return '$home/Movies/BasketballProjects';
+}
+
 /// 默认项目目录建不了项目时的备用目录，放在应用数据目录里，不受「受控文件夹访问」保护。
 String fallbackProjectsRoot(
   Map<String, String> env, {

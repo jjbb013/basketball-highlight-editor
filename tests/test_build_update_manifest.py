@@ -88,3 +88,20 @@ def test_android_package_uses_the_custom_domain(tmp_path: Path):
         "https://custom.example/releases/BHE-android-arm64-v8a-v0.1.11-debug-signed.apk"
     )
     assert manifest["packages"]["windows-x64"]["url"] == "https://oss.example/releases/BHE-windows-x64-v0.1.11.zip"
+
+
+@pytest.mark.parametrize('architecture', ['arm64', 'x86_64'])
+def test_bhe_pro_macos_assets_cannot_enter_legacy_update_channel(tmp_path: Path, architecture: str):
+    assets = tmp_path / 'assets'
+    assets.mkdir()
+    name = f'BHE-Pro-macos-{architecture}-v0.1.16-adhoc.dmg'
+    (assets / name).write_bytes(b'dmg')
+    (assets / 'BHE-windows-x64-v0.1.16.zip').write_bytes(b'zip')
+
+    with pytest.raises(ValueError, match='BHE Pro.*旧更新通道'):
+        manifest_script.package_entries(
+            assets,
+            '0.1.16',
+            'https://oss.example/releases',
+            'https://oss.example/releases',
+        )

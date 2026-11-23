@@ -81,7 +81,7 @@ class CsSidebarShell extends StatelessWidget {
             ),
           ),
           _UtilityItem(
-            label: l10n?.about ?? '关于',
+            label: l10n?.about(appDisplayName()) ?? '关于 ${appDisplayName()}',
             icon: LucideIcons.info,
             extended: extended,
             onTap: () => showCourtsideAboutDialog(context),

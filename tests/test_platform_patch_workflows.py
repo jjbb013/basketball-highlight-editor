@@ -251,15 +251,12 @@ def test_tag_push_cannot_enter_oss_job_and_still_uploads_release():
     assert upload['if'] == "${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}"
 
 
-def test_manual_release_asset_download_patterns_and_lock(tmp_path):
-    workflow = yaml.safe_load((ROOT / '.github/workflows/upload-release-assets-oss.yml').read_text())
-    inputs = workflow[True]['workflow_dispatch']['inputs']
-    assert inputs['dry_run']['type'] == 'boolean' and inputs['dry_run']['default'] is True
-    assert inputs['platform']['options'] == ['all', 'macos', 'windows', 'android']
-    job = workflow['jobs']['upload']
-    assert job['concurrency']['group'] == "${{ toJSON(inputs.dry_run) == 'false' && 'bhe-production-update-channel-v1' || 'bhe-dryrun-update-channel-v1' }}"
+def _assert_release_download_patterns(workflow, job_name, tmp_path):
+    job = workflow['jobs'][job_name]
     download = next(step for step in job['steps'] if step.get('name') == 'Download exact release assets')['run']
-    fake_gh = tmp_path / 'gh'
+    bindir = tmp_path / job_name
+    bindir.mkdir()
+    fake_gh = bindir / 'gh'
     fake_gh.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > "$ARG_LOG"\n')
     fake_gh.chmod(0o755)
     for platform, tag, patterns in [
@@ -268,14 +265,28 @@ def test_manual_release_asset_download_patterns_and_lock(tmp_path):
         ('windows', 'v0.1.13-windows.1', ['BHE-windows-*.zip', 'BHE-windows-*.zip.sha256']),
         ('android', 'v0.1.13-android.1', ['BHE-android-*.apk', 'BHE-android-*.apk.sha256']),
     ]:
-        arglog = tmp_path / (platform + '.args')
-        env = dict(os.environ, PATH=str(tmp_path)+':'+os.environ['PATH'], RUNNER_TEMP=str(tmp_path),
+        arglog = bindir / (platform + '.args')
+        env = dict(os.environ, PATH=str(bindir)+':'+os.environ['PATH'], RUNNER_TEMP=str(bindir),
                    TAG_NAME=tag, RELEASE_PLATFORM=platform, GITHUB_REPOSITORY='test/repo', ARG_LOG=str(arglog))
         subprocess.run(['bash', '-euo', 'pipefail', '-c', download], env=env, check=True)
         args = arglog.read_text().splitlines()
         assert args[:3] == ['release', 'download', tag]
         assert args[args.index('--repo') + 1] == 'test/repo'
         assert [args[i+1] for i, arg in enumerate(args) if arg == '--pattern'] == patterns
+
+
+def test_release_asset_download_patterns_and_manual_lock(tmp_path):
+    manual = yaml.safe_load((ROOT / '.github/workflows/upload-release-assets-oss.yml').read_text())
+    inputs = manual[True]['workflow_dispatch']['inputs']
+    assert inputs['dry_run']['type'] == 'boolean' and inputs['dry_run']['default'] is True
+    assert inputs['platform']['options'] == ['all', 'macos', 'windows', 'android']
+    assert manual['jobs']['upload']['concurrency']['group'] == "${{ toJSON(inputs.dry_run) == 'false' && 'bhe-production-update-channel-v1' || 'bhe-dryrun-update-channel-v1' }}"
+    for filename, job_name in [
+        ('release-packages.yml', 'oss-upload'),
+        ('upload-release-assets-oss.yml', 'upload'),
+    ]:
+        workflow = yaml.safe_load((ROOT / '.github/workflows' / filename).read_text())
+        _assert_release_download_patterns(workflow, job_name, tmp_path)
 
 
 def test_manual_missing_input_defaults_to_dry_run_through_every_gate(tmp_path):
@@ -423,3 +434,22 @@ def test_manual_workflow_passes_only_known_rewrite_options(tmp_path):
             args = arglog.read_text().splitlines()
             assert ('--rewrite-urls' in args) == (value != 'none')
             if value != 'none': assert args[args.index('--rewrite-urls') + 1] == value
+
+
+def test_release_job_download_pattern_covers_all_platform_artifacts():
+    from fnmatch import fnmatchcase
+
+    workflow = yaml.safe_load((ROOT / '.github/workflows/release-packages.yml').read_text())
+    download = next(
+        step for step in workflow['jobs']['release']['steps']
+        if step.get('name') == 'Download all packages'
+    )
+    pattern = download['with']['pattern']
+    assert pattern == 'BHE*'
+    for artifact in (
+        'BHE-Pro-macos-arm64',
+        'BHE-Pro-macos-x86_64',
+        'BHE-windows-x64',
+        'BHE-android-arm64-v8a',
+    ):
+        assert fnmatchcase(artifact, pattern), artifact

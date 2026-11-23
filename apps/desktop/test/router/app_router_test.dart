@@ -2,9 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:bhe_l10n/bhe_l10n.dart';
 
 import 'package:desktop/components/cs_bottom_nav.dart';
 import 'package:desktop/components/cs_sidebar_shell.dart';
+import 'package:desktop/core/app_identity.dart';
 import 'package:desktop/core/engine_client.dart';
 import 'package:desktop/providers/session_provider.dart';
 import 'package:desktop/providers/theme_provider.dart';
@@ -51,7 +53,7 @@ void main() {
       );
       container.read(appRouterProvider).go('/import');
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('关闭当前项目'));
+      await tester.tap(find.byTooltip('关闭当前项目？'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);
       await tester.tap(find.text('关闭项目'));
@@ -78,7 +80,24 @@ void main() {
 
       expect(find.byType(CsSidebarShell), findsOneWidget);
       expect(find.byType(CsBottomNav), findsNothing);
-      expect(find.text('BHE Pro'), findsOneWidget);
+      expect(find.text(appDisplayName()), findsOneWidget);
+    });
+
+    testWidgets('localized about entry uses the shared display name', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pumpHarness(tester);
+      await tester.tap(find.byTooltip('更多'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('关于 ${appDisplayName()}'), findsNWidgets(2));
+      if (appDisplayName() != 'BHE') {
+        expect(find.text('关于 BHE'), findsNothing);
+      }
     });
 
     testWidgets('narrow window renders CsBottomNav', (tester) async {
@@ -159,6 +178,9 @@ class _RouterHost extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
       routerConfig: ref.watch(appRouterProvider),
+      locale: const Locale('zh'),
+      localizationsDelegates: BheLocalizations.localizationsDelegates,
+      supportedLocales: BheLocalizations.supportedLocales,
       theme: ThemeData(),
       darkTheme: ThemeData(brightness: Brightness.dark),
     );

@@ -31,7 +31,8 @@
   "more": "More",
   "feedback": "Feedback",
   "feedbackMailClientMissing": "No mail client is available. Please contact the feedback email manually.",
-  "about": "About BHE",
+  "about": "About {appName}",
+  "@about": {"placeholders": {"appName": {"type": "String"}}},
   "backToProject": "Back to project",
   "localProcessing": "Processed locally",
   "switchTheme": "Switch theme",
@@ -39,7 +40,8 @@
   "languageChinese": "简体中文",
   "languageEnglish": "English",
   "taskInProgress": "Task in progress",
-  "confirmExit": "Exit BHE?",
+  "confirmExit": "Exit {appName}?",
+  "@confirmExit": {"placeholders": {"appName": {"type": "String"}}},
   "cancelTaskAndExit": "Cancel task and exit",
   "exitApp": "Exit",
   "returnAction": "Back",
@@ -276,5 +278,7 @@
   "reviewUnreviewed": "Not reviewed",
   "homeDropHint": "Or drop one or more videos here",
   "homeDropActive": "Release to create a project",
+  "updateMacInstallInstructions": "Download complete. Quit {appName}, open the installer, drag {appName} into Applications to replace the old version, then reopen it. Projects are stored elsewhere and will not be lost.",
+  "@updateMacInstallInstructions": {"placeholders": {"appName": {"type": "String"}}},
   "homeDropUnsupported": "Unsupported file. Drop an MP4, MOV, M4V, AVI or MKV video."
 }

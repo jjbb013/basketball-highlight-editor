@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:bhe_core/bhe_core.dart';
+import 'package:bhe_l10n/bhe_l10n.dart';
+import 'package:desktop/core/app_identity.dart';
 import 'package:desktop/features/update/update_dialog.dart';
 import 'package:desktop/core/windows_update_installer.dart';
 import 'package:desktop/providers/project_state.dart';
@@ -97,11 +99,16 @@ class _BusyProject extends ProjectNotifier {
   ProjectState build() => const ProjectState(busy: true);
 }
 
-ProviderContainer _container(_FakeUpdateService service, String current) {
+ProviderContainer _container(
+  _FakeUpdateService service,
+  String current, {
+  bool checksEnabled = true,
+}) {
   final container = ProviderContainer(
     overrides: [
       updateServiceProvider.overrideWithValue(service),
       appVersionProvider.overrideWithValue(current),
+      updateChecksEnabledProvider.overrideWithValue(checksEnabled),
     ],
   );
   addTearDown(container.dispose);
@@ -122,6 +129,7 @@ void main() {
           overrides: [
             updateServiceProvider.overrideWithValue(service),
             appVersionProvider.overrideWithValue('0.1.10'),
+            updateChecksEnabledProvider.overrideWithValue(true),
             projectProvider.overrideWith(
               busy ? _BusyProject.new : _IdleProject.new,
             ),
@@ -165,6 +173,7 @@ void main() {
       overrides: [
         updateServiceProvider.overrideWithValue(service),
         appVersionProvider.overrideWithValue('0.1.10'),
+        updateChecksEnabledProvider.overrideWithValue(true),
         updateLifecycleProvider.overrideWithValue(lifecycle),
       ],
     );
@@ -323,6 +332,35 @@ void main() {
     },
   );
 
+  test(
+    'macOS BHE Pro manual checks never fetch, download, or install',
+    () async {
+      final service = _FakeUpdateService(
+        _manifest('0.1.11'),
+        installable: true,
+      );
+      final container = _container(service, '0.1.10', checksEnabled: false);
+      final notifier = container.read(updateProvider.notifier);
+
+      await notifier.check(manual: true);
+
+      expect(service.fetches, 0);
+      await notifier.download();
+      await notifier.install();
+      expect(service.pendingDownload, isNull);
+      expect(service.events, isEmpty);
+      expect(container.read(updateProvider).manifest, isNull);
+    },
+  );
+
+  test('macOS BHE Pro automatic checks never fetch', () async {
+    final service = _FakeUpdateService(_manifest('0.1.11'));
+    final container = _container(service, '0.1.10', checksEnabled: false);
+
+    expect(await container.read(updateProvider.notifier).autoCheck(), isFalse);
+    expect(service.fetches, 0);
+  });
+
   test('auto check finds a newer version at most once a day', () async {
     final service = _FakeUpdateService(_manifest('0.1.11'));
     final container = _container(service, '0.1.10');
@@ -368,10 +406,14 @@ void main() {
         overrides: [
           updateServiceProvider.overrideWithValue(service),
           appVersionProvider.overrideWithValue('0.1.10'),
+          updateChecksEnabledProvider.overrideWithValue(true),
           projectProvider.overrideWith(_IdleProject.new),
         ],
         child: MaterialApp(
           theme: appTheme(Brightness.dark),
+          locale: const Locale('zh'),
+          localizationsDelegates: BheLocalizations.localizationsDelegates,
+          supportedLocales: BheLocalizations.supportedLocales,
           home: const Scaffold(body: UpdateDialog()),
         ),
       ),
@@ -391,6 +433,13 @@ void main() {
 
     service.pendingDownload!.complete(File('/tmp/BHE-v0.1.11.dmg'));
     await tester.pumpAndSettle();
+    final name = appDisplayName();
+    expect(
+      find.text(
+        '下载完成。退出 $name，打开安装包把 $name 拖进「应用程序」替换旧版本，再重新打开。项目保存在别的位置，不会丢。',
+      ),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const Key('update-open')));
     await tester.pump();
     expect(service.opened, ['/tmp/BHE-v0.1.11.dmg']);

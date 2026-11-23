@@ -184,7 +184,9 @@ class CsTopBar extends ConsumerWidget {
               ),
               PopupMenuItem(
                 value: 'about',
-                child: Text(l10n?.about ?? '关于 ${appDisplayName()}'),
+                child: Text(
+                  l10n?.about(appDisplayName()) ?? '关于 ${appDisplayName()}',
+                ),
               ),
             ],
           ),
