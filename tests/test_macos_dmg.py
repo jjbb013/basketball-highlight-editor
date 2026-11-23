@@ -78,3 +78,8 @@ printf 'test-dmg' > "$output"
     )
     assert result.returncode == expected_status, result.stderr
     assert int(count_file.read_text()) == expected_attempts
+
+
+def test_dmg_volume_is_named_bhe_pro():
+    script = (Path(__file__).resolve().parents[1] / 'scripts/create_macos_dmg.sh').read_text()
+    assert '-volname "BHE Pro"' in script

@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FLUTTER="${FLUTTER_BIN:-$ROOT/.tooling/flutter/bin/flutter}"
 RUNTIME_OUT="${BHE_RUNTIME_OUT:-$ROOT/dist/macos-runtime}"
-APP_DIR="$ROOT/apps/desktop/build/macos/Build/Products/Release"
-APP_NAME="${BHE_APP_NAME:-BHE}"
+APP_DIR="${BHE_APP_DIR:-$ROOT/apps/desktop/build/macos/Build/Products/Release}"
+APP_NAME="${BHE_APP_NAME:-BHE Pro}"
 APP="$APP_DIR/$APP_NAME.app"
 BUILD_NAME="${BHE_BUILD_NAME:-}"
 BUILD_NUMBER="${BHE_BUILD_NUMBER:-}"
@@ -89,17 +89,17 @@ if [[ "${BHE_SKIP_PACKAGE:-0}" != "1" ]]; then
   fi
   if [[ "${BHE_SKIP_DMG:-0}" != "1" ]]; then
     if [[ -z "$DMG_OUT" ]]; then
-      DMG_OUT="$ROOT/dist/BHE-macos-${ARCH}-v${package_version}-${package_kind}.dmg"
+      DMG_OUT="$ROOT/dist/BHE-Pro-macos-${ARCH}-v${package_version}-${package_kind}.dmg"
     fi
     dmg_staging="$(mktemp -d "${TMPDIR:-/tmp}/bhe-dmg.XXXXXX")"
     trap 'rm -rf "$dmg_staging"' EXIT
     ditto "$APP" "$dmg_staging/$APP_NAME.app"
-    cp "$ROOT/scripts/macos_dmg/BHE-首次打开修复.command" "$dmg_staging/"
-    cp "$ROOT/scripts/macos_dmg/BHE-使用说明.html" "$dmg_staging/"
-    chmod +x "$dmg_staging/BHE-首次打开修复.command"
+    cp "$ROOT/scripts/macos_dmg/BHE-Pro-首次打开修复.command" "$dmg_staging/"
+    cp "$ROOT/scripts/macos_dmg/BHE-Pro-使用说明.html" "$dmg_staging/"
+    chmod +x "$dmg_staging/BHE-Pro-首次打开修复.command"
     # Ad Hoc 签名修复脚本：Gatekeeper 仍会提示"无法验证"，但可避免部分
     # macOS 配置直接判定脚本"已损坏"，并让"右键 → 打开"路径保持可用。
-    codesign --sign - "$dmg_staging/BHE-首次打开修复.command" >/dev/null 2>&1 || true
+    codesign --sign - "$dmg_staging/BHE-Pro-首次打开修复.command" >/dev/null 2>&1 || true
     ln -s /Applications "$dmg_staging/Applications"
     rm -f "$DMG_OUT"
     bash "$ROOT/scripts/create_macos_dmg.sh" "$dmg_staging" "$DMG_OUT"

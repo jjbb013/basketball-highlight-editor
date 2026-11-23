@@ -17,7 +17,7 @@ mkdir -p "$(dirname "$output")"
 # https://github.com/actions/runner-images/issues/7522
 for attempt in 1 2 3 4 5; do
   # Do not pipe hdiutil: its helper process can keep the pipe open on failure.
-  if hdiutil create -volname "BHE" -fs HFS+ -srcfolder "$source_directory" \
+  if hdiutil create -volname "BHE Pro" -fs HFS+ -srcfolder "$source_directory" \
     -ov -format UDZO "$output" > "$log_file" 2>&1; then
     cat "$log_file"
     test -s "$output"

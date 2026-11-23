@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BHE macOS 使用说明</title>
+  <title>BHE Pro macOS 使用说明</title>
   <style>
     :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { max-width: 720px; margin: 48px auto; padding: 0 24px; color: #17202a; line-height: 1.7; }
@@ -27,7 +27,7 @@
   </style>
 </head>
 <body>
-  <h1>BHE macOS 使用说明</h1>
+  <h1>BHE Pro macOS 使用说明</h1>
   <p class="lead">当前版本是 Ad Hoc 签名的测试版，未做 Apple 公证，首次打开会被拦截——这是正常现象，不是软件损坏。</p>
 
   <div class="step">
@@ -35,25 +35,25 @@
     <ol style="margin:10px 0 0; padding-left:22px">
       <li>按 <code>Command + 空格</code>，输入“终端”或"Terminal"，回车打开；</li>
       <li>把下面这条命令粘贴进去，按回车；</li>
-      <li>BHE 会自动安装、解除拦截并启动。</li>
+      <li>BHE Pro 会自动安装、解除拦截并启动。</li>
     </ol>
     <div class="cmd-box">
-      <code id="fix-cmd">ditto "/Volumes/BHE/BHE.app" "$HOME/Applications/BHE.app" 2>/dev/null || ditto "/Volumes/BHE/BHE.app" /Applications/BHE.app; xattr -rd com.apple.quarantine /Applications/BHE.app "$HOME/Applications/BHE.app" 2>/dev/null; open -a BHE</code>
+      <code id="fix-cmd">ditto "/Volumes/BHE Pro/BHE Pro.app" "/Applications/BHE Pro.app" &amp;&amp; xattr -dr com.apple.quarantine "/Applications/BHE Pro.app" &amp;&amp; open "/Applications/BHE Pro.app"</code>
       <button class="copy-btn" onclick="copyCmd()">复制命令</button>
     </div>
   </div>
 
   <div class="step">
     <strong>方法二：右键打开（最快，多数情况够用）</strong><br>
-    把 <code>BHE.app</code> 拖到旁边的"Applications"图标中，然后在"应用程序"里的 BHE 上<strong>按住 Control 点击（或右键）→ 打开 → 再点"打开"</strong>。只需一次，之后可正常双击启动。
+    把 <code>BHE Pro.app</code> 拖到旁边的"Applications"图标中，然后在"应用程序"里的 BHE Pro 上<strong>按住 Control 点击（或右键）→ 打开 → 再点"打开"</strong>。只需一次，之后可正常双击启动。
   </div>
 
   <div class="step">
     <strong>方法三：一键修复命令（若系统允许运行）</strong><br>
-    双击 <code>BHE-首次打开修复.command</code>，自动完成安装、清拦截和启动。双击它时如果也弹"无法验证"，同样右键 → 打开；右键也不行，就用上面的方法一。
+    双击 <code>BHE-Pro-首次打开修复.command</code>，自动完成安装、清拦截和启动。双击它时如果也弹"无法验证"，同样右键 → 打开；右键也不行，就用上面的方法一。
   </div>
 
-  <p class="note">以上操作只处理 BHE.app，不会上传视频或访问外部服务。如果提示"应用已损坏"，说明下载不完整，请重新下载 DMG。彻底消除这些提示需要 Apple Developer ID 签名和公证，属于正式发布阶段的工作。</p>
+  <p class="note">以上操作只处理 BHE Pro.app，不读取、迁移或删除原版 BHE 的项目和设置，也不会上传视频或访问外部服务。如果提示"应用已损坏"，说明下载不完整，请重新下载 DMG。彻底消除这些提示需要 Apple Developer ID 签名和公证，属于正式发布阶段的工作。</p>
 
 <script>
 function copyCmd() {
