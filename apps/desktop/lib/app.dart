@@ -18,6 +18,7 @@ import 'providers/update_provider.dart';
 import 'router/app_router.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
+import 'core/app_identity.dart';
 import 'core/app_log.dart';
 import 'core/draft_flush_registry.dart';
 
@@ -52,26 +53,28 @@ class _CourtsideAppState extends ConsumerState<CourtsideApp>
     final version = ref.read(updateProvider).targetVersion;
     if (!found || !mounted || version == null) return;
     final id = 'update-$version';
-    ref.read(noticeProvider.notifier).push(
-      NoticeMessage(
-        id: id,
-        severity: NoticeSeverity.info,
-        title: '发现新版本 v$version',
-        description: '点「查看」了解更新内容',
-        actionLabel: '查看',
-        duration: const Duration(seconds: 10),
-        action: () {
-          final context = ref
-              .read(appRouterProvider)
-              .routerDelegate
-              .navigatorKey
-              .currentContext;
-          if (context == null) return;
-          ref.read(noticeProvider.notifier).dismiss(id);
-          showUpdateDialog(context);
-        },
-      ),
-    );
+    ref
+        .read(noticeProvider.notifier)
+        .push(
+          NoticeMessage(
+            id: id,
+            severity: NoticeSeverity.info,
+            title: '发现新版本 v$version',
+            description: '点「查看」了解更新内容',
+            actionLabel: '查看',
+            duration: const Duration(seconds: 10),
+            action: () {
+              final context = ref
+                  .read(appRouterProvider)
+                  .routerDelegate
+                  .navigatorKey
+                  .currentContext;
+              if (context == null) return;
+              ref.read(noticeProvider.notifier).dismiss(id);
+              showUpdateDialog(context);
+            },
+          ),
+        );
   }
 
   Future<void> _syncNativeWindowBrightness(ThemeMode mode) async {
@@ -152,7 +155,7 @@ class _CourtsideAppState extends ConsumerState<CourtsideApp>
           title: Text(
             busy
                 ? (l10n?.taskInProgress ?? '任务仍在进行')
-                : (l10n?.confirmExit ?? '退出 BHE？'),
+                : (l10n?.confirmExit ?? '退出 ${appDisplayName()}？'),
           ),
           content: Text(
             busy
@@ -193,7 +196,7 @@ class _CourtsideAppState extends ConsumerState<CourtsideApp>
   Widget build(BuildContext context) {
     return MaterialApp.router(
       routerConfig: ref.watch(appRouterProvider),
-      title: 'BHE',
+      title: appDisplayName(),
       locale: ref.watch(appLocaleProvider),
       localizationsDelegates: BheLocalizations.localizationsDelegates,
       supportedLocales: BheLocalizations.supportedLocales,

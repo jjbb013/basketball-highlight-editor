@@ -2,10 +2,16 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-String engineLogDirectory(Map<String, String> env) {
+String engineLogDirectory(
+  Map<String, String> env, {
+  bool? isWindows,
+  bool? isMacOS,
+}) {
   final home = env['HOME'] ?? env['USERPROFILE'] ?? Directory.systemTemp.path;
-  if (Platform.isMacOS) return '$home/Library/Logs/BHE';
-  if (Platform.isWindows) return '${env['LOCALAPPDATA'] ?? home}\\BHE\\logs';
+  if (isMacOS ?? Platform.isMacOS) return '$home/Library/Logs/BHE Pro';
+  if (isWindows ?? Platform.isWindows) {
+    return '${env['LOCALAPPDATA'] ?? home}\\BHE\\logs';
+  }
   return '${env['XDG_STATE_HOME'] ?? '$home/.local/state'}/bhe/logs';
 }
 
@@ -58,11 +64,23 @@ const _maxScanLength = 4000;
 
 final _secretPatterns = <(RegExp, String)>[
   // URL 查询参数里常见的凭据
-  (RegExp(r'([?&](?:token|access_token|key|api_key|apikey|secret|sig|signature|password|pwd)=)[^&\s"]+', caseSensitive: false), r'$1***'),
+  (
+    RegExp(
+      r'([?&](?:token|access_token|key|api_key|apikey|secret|sig|signature|password|pwd)=)[^&\s"]+',
+      caseSensitive: false,
+    ),
+    r'$1***',
+  ),
   // Authorization / Bearer
   (RegExp(r'(Bearer\s+)[A-Za-z0-9._\-]+', caseSensitive: false), r'$1***'),
   // key: value / key=value 形式的凭据
-  (RegExp(r'((?:token|secret|password|passwd|api[_-]?key|authorization)["\s]*[:=]["\s]*)[^\s,;"}&]+', caseSensitive: false), r'$1***'),
+  (
+    RegExp(
+      r'((?:token|secret|password|passwd|api[_-]?key|authorization)["\s]*[:=]["\s]*)[^\s,;"}&]+',
+      caseSensitive: false,
+    ),
+    r'$1***',
+  ),
 ];
 
 final _pathPatterns = <RegExp>[
@@ -70,12 +88,16 @@ final _pathPatterns = <RegExp>[
   // Windows 盘符路径与 UNC 路径
   RegExp(r'(?:(?<![A-Za-z0-9])[A-Za-z]:[\\/]|\\\\)[^\s"\x27<>|*?]*'),
   // 以斜杠开头、至少两段的绝对路径（前面是行首/空白/引号/等号/括号/逗号，避免吃掉网址）
-  RegExp(r'(?<=^|[\s"\x27=(,])/(?:[^\s"\x27<>:/]+/)+[^\s"\x27<>:/]*', multiLine: true),
+  RegExp(
+    r'(?<=^|[\s"\x27=(,])/(?:[^\s"\x27<>:/]+/)+[^\s"\x27<>:/]*',
+    multiLine: true,
+  ),
 ];
 
 String _maskPath(Match match) {
   final path = match.group(0)!;
-  final extension = RegExp(r'\.[A-Za-z0-9]{1,5}$').firstMatch(path)?.group(0) ?? '';
+  final extension =
+      RegExp(r'\.[A-Za-z0-9]{1,5}$').firstMatch(path)?.group(0) ?? '';
   return '<path>$extension';
 }
 
@@ -84,7 +106,9 @@ String _maskPath(Match match) {
 String sanitizeLogText(String text) {
   // 先按上限截断再跑正则：超长异常文本不会让界面线程在正则上花时间；
   // 最终只保留前 800 个字符，所以 4000 之后的内容本来就不会写出。
-  var result = text.length > _maxScanLength ? text.substring(0, _maxScanLength) : text;
+  var result = text.length > _maxScanLength
+      ? text.substring(0, _maxScanLength)
+      : text;
   for (final pattern in _pathPatterns) {
     result = result.replaceAllMapped(pattern, _maskPath);
   }
@@ -98,7 +122,8 @@ String sanitizeLogText(String text) {
     });
   }
   if (result.length > _maxLogMessageLength) {
-    result = '${result.substring(0, _maxLogMessageLength)}…(已截断，原长 ${text.length})';
+    result =
+        '${result.substring(0, _maxLogMessageLength)}…(已截断，原长 ${text.length})';
   }
   return result;
 }

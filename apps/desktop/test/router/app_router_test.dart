@@ -78,6 +78,7 @@ void main() {
 
       expect(find.byType(CsSidebarShell), findsOneWidget);
       expect(find.byType(CsBottomNav), findsNothing);
+      expect(find.text('BHE Pro'), findsOneWidget);
     });
 
     testWidgets('narrow window renders CsBottomNav', (tester) async {

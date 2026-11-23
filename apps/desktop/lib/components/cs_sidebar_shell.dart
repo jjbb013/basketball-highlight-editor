@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:bhe_l10n/bhe_l10n.dart';
 
+import '../core/app_identity.dart';
 import '../theme/app_colors.dart';
 import '../theme/tokens.dart';
 import '../features/about/about_dialog.dart';
@@ -248,7 +249,7 @@ class _SidebarBrand extends StatelessWidget {
             const SizedBox(width: Spacing.sm),
             Expanded(
               child: Text(
-                'BHE',
+                appDisplayName(),
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelLarge?.copyWith(
                   color: c.textPrimary,

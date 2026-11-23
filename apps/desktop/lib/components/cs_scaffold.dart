@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:bhe_l10n/bhe_l10n.dart';
 
+import '../core/app_identity.dart';
 import '../core/app_log.dart';
 import '../providers/session_provider.dart';
 import '../providers/project_state.dart';
@@ -146,16 +147,18 @@ class CsTopBar extends ConsumerWidget {
             IconButton(
               key: const Key('onboarding-help'),
               tooltip: context.bheText('本页新手引导'),
-              icon: Icon(LucideIcons.helpCircle, size: 18, color: c.textSecondary),
-              onPressed: () => ref
-                  .read(onboardingProvider.notifier)
-                  .replay(
-                    switch (shell.currentIndex) {
-                      1 => onboardingImportPage,
-                      2 => onboardingReviewPage,
-                      _ => onboardingExportPage,
-                    },
-                  ),
+              icon: Icon(
+                LucideIcons.helpCircle,
+                size: 18,
+                color: c.textSecondary,
+              ),
+              onPressed: () => ref.read(onboardingProvider.notifier).replay(
+                switch (shell.currentIndex) {
+                  1 => onboardingImportPage,
+                  2 => onboardingReviewPage,
+                  _ => onboardingExportPage,
+                },
+              ),
             ),
           PopupMenuButton<String>(
             key: feedbackMenuKey,
@@ -181,7 +184,7 @@ class CsTopBar extends ConsumerWidget {
               ),
               PopupMenuItem(
                 value: 'about',
-                child: Text(l10n?.about ?? '关于 BHE'),
+                child: Text(l10n?.about ?? '关于 ${appDisplayName()}'),
               ),
             ],
           ),
@@ -197,7 +200,9 @@ class CsTopBar extends ConsumerWidget {
               color: c.textSecondary,
             ),
             onPressed: () {
-              ref.read(themeModeProvider.notifier).set(_nextThemeMode(themeMode));
+              ref
+                  .read(themeModeProvider.notifier)
+                  .set(_nextThemeMode(themeMode));
             },
           ),
           PopupMenuButton<Locale>(
@@ -243,9 +248,7 @@ class CsTopBar extends ConsumerWidget {
       await ref.read(onboardingProvider.notifier).reset();
       if (context.mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(
-            content: Text(context.bheText('已重置，下次进入审核页和导出页会再次显示新手引导')),
-          ),
+          SnackBar(content: Text(context.bheText('已重置，下次进入审核页和导出页会再次显示新手引导'))),
         );
       }
       return;

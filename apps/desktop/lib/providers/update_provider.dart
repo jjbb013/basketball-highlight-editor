@@ -47,10 +47,18 @@ class UpdateState {
   UpdatePackage? get package => manifest?.packages[currentUpdatePlatform()];
 }
 
-String updateDownloadDirectory(Map<String, String> env) {
+String updateDownloadDirectory(
+  Map<String, String> env, {
+  bool? isWindows,
+  bool? isMacOS,
+}) {
   final home = env['HOME'] ?? env['USERPROFILE'] ?? Directory.systemTemp.path;
-  if (Platform.isMacOS) return '$home/Library/Caches/BHE/updates';
-  if (Platform.isWindows) return '${env['LOCALAPPDATA'] ?? home}\\BHE\\updates';
+  if (isMacOS ?? Platform.isMacOS) {
+    return '$home/Library/Caches/BHE Pro/updates';
+  }
+  if (isWindows ?? Platform.isWindows) {
+    return '${env['LOCALAPPDATA'] ?? home}\\BHE\\updates';
+  }
   return '${env['XDG_CACHE_HOME'] ?? '$home/.cache'}/bhe/updates';
 }
 
@@ -224,7 +232,11 @@ class UpdateNotifier extends Notifier<UpdateState> {
     _downloadClient = client;
     _cancelled = false;
     state = UpdateState(status: UpdateStatus.downloading, manifest: manifest);
-    appLog('info', 'update', '开始下载更新 v${manifest.versionFor(currentUpdatePlatform())} size=${package.size}');
+    appLog(
+      'info',
+      'update',
+      '开始下载更新 v${manifest.versionFor(currentUpdatePlatform())} size=${package.size}',
+    );
     var reported = 0;
     try {
       final file = await ref.read(updateServiceProvider).download(
@@ -316,11 +328,15 @@ class UpdateNotifier extends Notifier<UpdateState> {
     } catch (error) {
       try {
         await session?.cancel();
-      } catch (error) { appLog('warn', 'update_provider', 'install 忽略了错误: $error'); }
+      } catch (error) {
+        appLog('warn', 'update_provider', 'install 忽略了错误: $error');
+      }
       if (preparingExit) {
         try {
           await lifecycle.resume();
-        } catch (error) { appLog('warn', 'update_provider', 'install 忽略了错误: $error'); }
+        } catch (error) {
+          appLog('warn', 'update_provider', 'install 忽略了错误: $error');
+        }
       }
       state = UpdateState(
         status: UpdateStatus.ready,

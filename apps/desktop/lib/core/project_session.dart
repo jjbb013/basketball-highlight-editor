@@ -14,12 +14,18 @@ String canonicalProjectPath(String path) {
 }
 
 /// 默认项目目录建不了项目时的备用目录，放在应用数据目录里，不受「受控文件夹访问」保护。
-String fallbackProjectsRoot(Map<String, String> env) {
+String fallbackProjectsRoot(
+  Map<String, String> env, {
+  bool? isWindows,
+  bool? isMacOS,
+}) {
   final home = env['HOME'] ?? env['USERPROFILE'] ?? Directory.systemTemp.path;
-  if (Platform.isWindows) {
+  if (isWindows ?? Platform.isWindows) {
     return '${env['LOCALAPPDATA'] ?? home}\\BHE\\Projects';
   }
-  if (Platform.isMacOS) return '$home/Library/Application Support/BHE/Projects';
+  if (isMacOS ?? Platform.isMacOS) {
+    return '$home/Library/Application Support/BHE Pro/Projects';
+  }
   return '${env['XDG_DATA_HOME'] ?? '$home/.local/share'}/bhe/projects';
 }
 

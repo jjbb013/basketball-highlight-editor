@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:bhe_l10n/bhe_l10n.dart';
 
+import '../../core/app_identity.dart';
 import '../../core/app_log.dart';
 import '../../core/contact_actions.dart';
 import '../../core/diagnostics.dart';
@@ -39,74 +40,77 @@ class _CourtsideAboutDialog extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 460),
         child: Padding(
           padding: const EdgeInsets.all(Spacing.xl),
-          child: SingleChildScrollView(child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: c.orange.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(CsRadius.md),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: c.orange.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(CsRadius.md),
+                      ),
+                      child: Icon(LucideIcons.volleyball, color: c.orange),
                     ),
-                    child: Icon(LucideIcons.volleyball, color: c.orange),
-                  ),
-                  const SizedBox(width: Spacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('BHE', style: theme.textTheme.titleLarge),
-                        const SizedBox(height: 4),
-                        Text(
-                          'basketball-highlight-editor',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                        Text(
-                          l10n?.text('篮球高光视频助手') ?? '篮球高光视频助手',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: c.textSecondary,
+                    const SizedBox(width: Spacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            appDisplayName(),
+                            style: theme.textTheme.titleLarge,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            'basketball-highlight-editor',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          Text(
+                            l10n?.text('篮球高光视频助手') ?? '篮球高光视频助手',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: c.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: l10n?.text('关闭') ?? '关闭',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(LucideIcons.x, size: 18),
-                  ),
-                ],
-              ),
-              const SizedBox(height: Spacing.lg),
-              Text(
-                l10n?.productDescription ?? '从固定机位视频中识别投篮候选，审核后快速导出个人或全场高光。',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: c.textSecondary,
-                  height: 1.5,
+                    IconButton(
+                      tooltip: l10n?.text('关闭') ?? '关闭',
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(LucideIcons.x, size: 18),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: Spacing.lg),
-              _InfoRow(label: context.bheText('版本'), value: 'v$appVersion'),
-              _InfoRow(
-                label: l10n?.processingMethod ?? '处理方式',
-                value: l10n?.text('本地处理，原始视频不会自动上传') ??
-                    '本地处理，原始视频不会自动上传',
-              ),
-              _InfoRow(
-                label: l10n?.feedbackEmail ?? '反馈邮箱',
-                value: feedbackEmail,
-              ),
-              _InfoRow(
-                label: 'GitHub',
-                value: l10n?.githubComingSoon ?? '即将开放',
-              ),
-              _InfoRow(label: context.bheText('运行日志'), value: logDirectory),
-              const SizedBox(height: Spacing.lg),
-              Material(
+                const SizedBox(height: Spacing.lg),
+                Text(
+                  l10n?.productDescription ?? '从固定机位视频中识别投篮候选，审核后快速导出个人或全场高光。',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: c.textSecondary,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: Spacing.lg),
+                _InfoRow(label: context.bheText('版本'), value: 'v$appVersion'),
+                _InfoRow(
+                  label: l10n?.processingMethod ?? '处理方式',
+                  value: l10n?.text('本地处理，原始视频不会自动上传') ?? '本地处理，原始视频不会自动上传',
+                ),
+                _InfoRow(
+                  label: l10n?.feedbackEmail ?? '反馈邮箱',
+                  value: feedbackEmail,
+                ),
+                _InfoRow(
+                  label: 'GitHub',
+                  value: l10n?.githubComingSoon ?? '即将开放',
+                ),
+                _InfoRow(label: context.bheText('运行日志'), value: logDirectory),
+                const SizedBox(height: Spacing.lg),
+                Material(
                   color: c.surface2,
                   clipBehavior: Clip.antiAlias,
                   shape: RoundedRectangleBorder(
@@ -117,9 +121,8 @@ class _CourtsideAboutDialog extends StatelessWidget {
                     key: const ValueKey('about-third-party-notices'),
                     onTap: () => showLicensePage(
                       context: context,
-                      applicationName: 'BHE',
+                      applicationName: appDisplayName(),
                       applicationVersion: 'v$appVersion',
-
                     ),
                     child: SizedBox(
                       height: 44,
@@ -151,48 +154,51 @@ class _CourtsideAboutDialog extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: Spacing.md),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: Spacing.sm,
-                runSpacing: Spacing.xs,
-                children: [
-                  TextButton.icon(
-                    onPressed: () async {
-                      await Directory(logDirectory).create(recursive: true);
-                      await openExternalUri(logDirectory);
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: c.textPrimary, minimumSize: const Size(44, 44),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: Spacing.sm,
+                  runSpacing: Spacing.xs,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () async {
+                        await Directory(logDirectory).create(recursive: true);
+                        await openExternalUri(logDirectory);
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: c.textPrimary,
+                        minimumSize: const Size(44, 44),
+                      ),
+                      icon: const Icon(LucideIcons.folderOpen, size: 17),
+                      label: Text(context.bheText('打开日志目录')),
                     ),
-                    icon: const Icon(LucideIcons.folderOpen, size: 17),
-                    label: Text(context.bheText('打开日志目录')),
-                  ),
-                  TextButton.icon(
-                    onPressed: () {
-                      final navigator = Navigator.of(context);
-                      navigator.pop();
-                      showUpdateDialog(navigator.context);
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: c.textPrimary, minimumSize: const Size(44, 44),
+                    TextButton.icon(
+                      onPressed: () {
+                        final navigator = Navigator.of(context);
+                        navigator.pop();
+                        showUpdateDialog(navigator.context);
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: c.textPrimary,
+                        minimumSize: const Size(44, 44),
+                      ),
+                      icon: const Icon(LucideIcons.circleArrowUp, size: 17),
+                      label: Text(context.bheText('检查更新')),
                     ),
-                    icon: const Icon(LucideIcons.circleArrowUp, size: 17),
-                    label: Text(context.bheText('检查更新')),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      final navigator = Navigator.of(context);
-                      navigator.pop();
-                      showFeedbackDialog(navigator.context);
-                    },
-                    style: _aboutOutlinedButtonStyle(context),
-                    icon: const Icon(LucideIcons.mail, size: 17),
-                    label: Text(l10n?.sendFeedback ?? '发送反馈'),
-                  ),
-                ],
-              ),
-            ],
-          )),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final navigator = Navigator.of(context);
+                        navigator.pop();
+                        showFeedbackDialog(navigator.context);
+                      },
+                      style: _aboutOutlinedButtonStyle(context),
+                      icon: const Icon(LucideIcons.mail, size: 17),
+                      label: Text(l10n?.sendFeedback ?? '发送反馈'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
