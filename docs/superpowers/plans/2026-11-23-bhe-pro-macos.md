@@ -242,7 +242,7 @@ expect(find.text('BHE Pro'), findsOneWidget);
 
 - [ ] **Step 2: 运行测试确认失败**
 
-Run: `cd apps/desktop && ../../.tooling/flutter/bin/flutter test test/core/app_identity_test.dart test/router/app_router_test.dart`
+Run: `cd apps/desktop && ../../../.tooling/flutter/bin/flutter test test/core/app_identity_test.dart test/router/app_router_test.dart`
 Expected: 编译失败，找不到 `app_identity.dart`；实现部分函数后，关于页面和侧栏的 `BHE Pro` 断言必须先失败，再替换可见字符串。
 
 - [ ] **Step 3: 新建统一显示名称和可测试目录函数**
@@ -356,7 +356,7 @@ applicationVersion: 'v$appVersion',
 
 - [ ] **Step 5: 格式化并运行目标测试**
 
-Run: `cd apps/desktop && ../../.tooling/flutter/bin/dart format lib/core/app_identity.dart lib/core/project_session.dart lib/core/app_log.dart lib/providers/update_provider.dart lib/app.dart lib/components/cs_sidebar_shell.dart lib/components/cs_scaffold.dart lib/features/about/about_dialog.dart test/core/app_identity_test.dart test/router/app_router_test.dart && ../../.tooling/flutter/bin/flutter test test/core/app_identity_test.dart test/router/app_router_test.dart`
+Run: `cd apps/desktop && ../../../.tooling/flutter/bin/dart format lib/core/app_identity.dart lib/core/project_session.dart lib/core/app_log.dart lib/providers/update_provider.dart lib/app.dart lib/components/cs_sidebar_shell.dart lib/components/cs_scaffold.dart lib/features/about/about_dialog.dart test/core/app_identity_test.dart test/router/app_router_test.dart && ../../../.tooling/flutter/bin/flutter test test/core/app_identity_test.dart test/router/app_router_test.dart`
 Expected: 全部 PASS；本机为 macOS，因此关于页及侧栏应显示 `BHE Pro`。
 
 - [ ] **Step 6: 提交品牌和数据隔离**
@@ -810,8 +810,8 @@ Run:
 git status --short
 git diff --check
 ../.venv/bin/python -m pytest -q
-../.tooling/flutter/bin/flutter analyze apps/desktop
-../.tooling/flutter/bin/flutter test apps/desktop
+(cd apps/desktop && ../../../.tooling/flutter/bin/flutter analyze)
+(cd apps/desktop && ../../../.tooling/flutter/bin/flutter test)
 ```
 
 Expected: 工作区无未提交改动；Python、Flutter 全部 PASS；分析无问题。任何失败先修复并重跑对应全量检查，不能用 `.2` 的历史结果代替。
