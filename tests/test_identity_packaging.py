@@ -34,7 +34,7 @@ def test_ci_smoke_loads_both_packaged_models_without_network_repair():
     workflow = yaml.safe_load((ROOT / '.github/workflows/release-packages.yml').read_text())
     build = next(step for step in workflow['jobs']['macos']['steps'] if step.get('name') == 'Build macOS package')
     script = build['run']
+    assert 'BHE Pro.app/Contents/Resources/runtime' in script
     assert 'scripts/check_packaged_models.py --runtime' in script
-    assert 'BHE.app/Contents/Resources/runtime' in script
     assert 'YOLO_AUTOINSTALL=false' in script
     subprocess.run(['bash', '-n'], input=script, text=True, check=True)

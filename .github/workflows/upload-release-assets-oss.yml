@@ -109,8 +109,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bhe-release-assets"
           args=("$TAG_NAME" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/bhe-release-assets")
           case "$RELEASE_PLATFORM" in
-            all) patterns=('BHE-*.dmg' 'BHE-*.dmg.sha256' 'BHE-*.zip' 'BHE-*.zip.sha256' 'BHE-*.apk' 'BHE-*.apk.sha256') ;;
-            macos) patterns=('BHE-macos-*.dmg' 'BHE-macos-*.dmg.sha256') ;;
+            all) patterns=('BHE-Pro-*.dmg' 'BHE-Pro-*.dmg.sha256' 'BHE-*.zip' 'BHE-*.zip.sha256' 'BHE-*.apk' 'BHE-*.apk.sha256') ;;
+            macos) patterns=('BHE-Pro-macos-*.dmg' 'BHE-Pro-macos-*.dmg.sha256') ;;
             windows) patterns=('BHE-windows-*.zip' 'BHE-windows-*.zip.sha256') ;;
             android) patterns=('BHE-android-*.apk' 'BHE-android-*.apk.sha256') ;;
             *) echo 'Unsupported platform' >&2; exit 1 ;;

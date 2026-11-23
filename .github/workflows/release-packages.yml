@@ -299,7 +299,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${TAG_NAME#v}"
-          dmg="$GITHUB_WORKSPACE/dist/BHE-macos-${ARCH}-v${version}-adhoc.dmg"
+          dmg="$GITHUB_WORKSPACE/dist/BHE-Pro-macos-${ARCH}-v${version}-adhoc.dmg"
           BHE_PYTHON_RUNTIME="$PYTHON_ROOT" \
           BHE_FFMPEG="$FFMPEG_PATH" \
           BHE_FFPROBE="$FFPROBE_PATH" \
@@ -308,23 +308,34 @@ jobs:
           BHE_DMG_OUT="$dmg" \
           FLUTTER_BIN="$(command -v flutter)" \
           scripts/build_macos_release.sh
-          file "apps/desktop/build/macos/Build/Products/Release/BHE.app/Contents/MacOS/BHE"
-          codesign --verify --deep --strict "apps/desktop/build/macos/Build/Products/Release/BHE.app"
-          # Test the bundled interpreter after runtime copying and signing.
+          file "apps/desktop/build/macos/Build/Products/Release/BHE Pro.app/Contents/MacOS/BHE Pro"
+          codesign --verify --deep --strict "apps/desktop/build/macos/Build/Products/Release/BHE Pro.app"
           export PYTHONDONTWRITEBYTECODE=1 YOLO_AUTOINSTALL=false
           export YOLO_CONFIG_DIR="$RUNNER_TEMP/bhe-yolo-smoke"
           python3 scripts/check_numpy_preprocess.py --python \
-            "apps/desktop/build/macos/Build/Products/Release/BHE.app/Contents/Resources/runtime/python/bin/python3"
+            "apps/desktop/build/macos/Build/Products/Release/BHE Pro.app/Contents/Resources/runtime/python/bin/python3"
           python3 scripts/check_packaged_models.py --runtime \
-            "apps/desktop/build/macos/Build/Products/Release/BHE.app/Contents/Resources/runtime"
+            "apps/desktop/build/macos/Build/Products/Release/BHE Pro.app/Contents/Resources/runtime"
+          mount_point="$RUNNER_TEMP/bhe-pro-mounted"
+          mkdir -p "$mount_point"
+          trap 'hdiutil detach "$mount_point" >/dev/null 2>&1 || true' EXIT
+          hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_point"
+          test -d "$mount_point/BHE Pro.app"
+          test -x "$mount_point/BHE-Pro-首次打开修复.command"
+          test -f "$mount_point/BHE-Pro-使用说明.html"
+          test "$(plutil -extract CFBundleDisplayName raw "$mount_point/BHE Pro.app/Contents/Info.plist")" = "BHE Pro"
+          test "$(plutil -extract CFBundleIdentifier raw "$mount_point/BHE Pro.app/Contents/Info.plist")" = "com.courtside.bhepro"
+          codesign --verify --deep --strict "$mount_point/BHE Pro.app"
+          hdiutil detach "$mount_point"
+          trap - EXIT
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BHE-macos-${{ matrix.arch }}
+          name: BHE-Pro-macos-${{ matrix.arch }}
           path: |
-            dist/BHE-macos-${{ matrix.arch }}-v*-adhoc.dmg
-            dist/BHE-macos-${{ matrix.arch }}-v*-adhoc.dmg.sha256
+            dist/BHE-Pro-macos-${{ matrix.arch }}-v*-adhoc.dmg
+            dist/BHE-Pro-macos-${{ matrix.arch }}-v*-adhoc.dmg.sha256
           if-no-files-found: error
 
   windows:
@@ -684,8 +695,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bhe-release-assets"
           args=("$TAG_NAME" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/bhe-release-assets")
           case "$RELEASE_PLATFORM" in
-            all) patterns=('BHE-*.dmg' 'BHE-*.dmg.sha256' 'BHE-*.zip' 'BHE-*.zip.sha256' 'BHE-*.apk' 'BHE-*.apk.sha256') ;;
-            macos) patterns=('BHE-macos-*.dmg' 'BHE-macos-*.dmg.sha256') ;;
+            all) patterns=('BHE-Pro-*.dmg' 'BHE-Pro-*.dmg.sha256' 'BHE-*.zip' 'BHE-*.zip.sha256' 'BHE-*.apk' 'BHE-*.apk.sha256') ;;
+            macos) patterns=('BHE-Pro-macos-*.dmg' 'BHE-Pro-macos-*.dmg.sha256') ;;
             windows) patterns=('BHE-windows-*.zip' 'BHE-windows-*.zip.sha256') ;;
             android) patterns=('BHE-android-*.apk' 'BHE-android-*.apk.sha256') ;;
             *) echo 'Unsupported platform' >&2; exit 1 ;;
@@ -697,7 +708,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         uses: actions/download-artifact@v4
         with:
-          pattern: BHE-*
+          pattern: BHE*
           path: ${{ runner.temp }}/bhe-release-assets
           merge-multiple: true
       - name: Configure ossutil credentials

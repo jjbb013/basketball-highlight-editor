@@ -263,8 +263,8 @@ def test_manual_release_asset_download_patterns_and_lock(tmp_path):
     fake_gh.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > "$ARG_LOG"\n')
     fake_gh.chmod(0o755)
     for platform, tag, patterns in [
-        ('all', 'v0.1.13', ['BHE-*.dmg', 'BHE-*.dmg.sha256', 'BHE-*.zip', 'BHE-*.zip.sha256', 'BHE-*.apk', 'BHE-*.apk.sha256']),
-        ('macos', 'v0.1.13-macos.1', ['BHE-macos-*.dmg', 'BHE-macos-*.dmg.sha256']),
+        ('all', 'v0.1.13', ['BHE-Pro-*.dmg', 'BHE-Pro-*.dmg.sha256', 'BHE-*.zip', 'BHE-*.zip.sha256', 'BHE-*.apk', 'BHE-*.apk.sha256']),
+        ('macos', 'v0.1.13-macos.1', ['BHE-Pro-macos-*.dmg', 'BHE-Pro-macos-*.dmg.sha256']),
         ('windows', 'v0.1.13-windows.1', ['BHE-windows-*.zip', 'BHE-windows-*.zip.sha256']),
         ('android', 'v0.1.13-android.1', ['BHE-android-*.apk', 'BHE-android-*.apk.sha256']),
     ]:
@@ -337,9 +337,45 @@ def test_macos_release_tests_bundled_numpy_preprocessing():
     build = next(step for step in workflow['jobs']['macos']['steps'] if step.get('name') == 'Build macOS package')
     script = build['run']
     subprocess.run(['bash', '-n'], input=script, text=True, check=True)
-    assert 'BHE.app/Contents/Resources/runtime/python/bin/python3' in script
+    assert 'BHE Pro.app/Contents/Resources/runtime/python/bin/python3' in script
     assert 'scripts/check_numpy_preprocess.py --python' in script
     assert script.index('scripts/build_macos_release.sh') < script.index('scripts/check_numpy_preprocess.py')
+
+
+def test_macos_release_uses_bhe_pro_app_and_new_asset_prefix():
+    workflow = yaml.safe_load((ROOT / '.github/workflows/release-packages.yml').read_text())
+    build = next(step for step in workflow['jobs']['macos']['steps'] if step.get('name') == 'Build macOS package')
+    script = build['run']
+    assert 'dist/BHE-Pro-macos-${ARCH}-v${version}-adhoc.dmg' in script
+    assert 'Release/BHE Pro.app/Contents/MacOS/BHE Pro' in script
+    assert 'Release/BHE.app' not in script
+    assert 'dist/BHE-macos-' not in script
+    assert 'hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_point"' in script
+    assert 'plutil -extract CFBundleIdentifier raw "$mount_point/BHE Pro.app/Contents/Info.plist"' in script
+    assert any(
+        'BHE-Pro-macos-*.dmg.sha256' in step.get('run', '')
+        for step in workflow['jobs']['oss-upload']['steps']
+    )
+    assert 'test -d "$mount_point/BHE Pro.app"' in script
+    assert 'test -x "$mount_point/BHE-Pro-首次打开修复.command"' in script
+    assert 'test -f "$mount_point/BHE-Pro-使用说明.html"' in script
+    assert 'test "$(plutil -extract CFBundleDisplayName raw "$mount_point/BHE Pro.app/Contents/Info.plist")" = "BHE Pro"' in script
+    assert 'test "$(plutil -extract CFBundleIdentifier raw "$mount_point/BHE Pro.app/Contents/Info.plist")" = "com.courtside.bhepro"' in script
+    assert 'codesign --verify --deep --strict "$mount_point/BHE Pro.app"' in script
+    cleanup = 'trap \'hdiutil detach "$mount_point" >/dev/null 2>&1 || true\' EXIT'
+    assert cleanup in script
+    assert script.index(cleanup) < script.index('hdiutil attach "$dmg"')
+    assert 'hdiutil detach "$mount_point"\ntrap - EXIT' in script
+
+    upload = next(step for step in workflow['jobs']['macos']['steps'] if step.get('name') == 'Upload macOS artifact')
+    assert upload['with']['name'] == 'BHE-Pro-macos-${{ matrix.arch }}'
+    assert upload['with']['path'] == (
+        'dist/BHE-Pro-macos-${{ matrix.arch }}-v*-adhoc.dmg\n'
+        'dist/BHE-Pro-macos-${{ matrix.arch }}-v*-adhoc.dmg.sha256\n'
+    )
+    assert upload['with']['if-no-files-found'] == 'error'
+    download = next(step for step in workflow['jobs']['oss-upload']['steps'] if step.get('name') == 'Download built assets for rehearsal')
+    assert download['with']['pattern'] == 'BHE*'
 
 
 def test_native_intel_smoke_uses_release_constraints():
