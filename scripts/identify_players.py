@@ -30,6 +30,7 @@ def parse_args():
     parser.add_argument("--candidates", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--roi", nargs=4, type=int, required=True)
+    parser.add_argument("--person-roi", nargs=4, type=int, default=None)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--sample-fps", type=float, default=15)
     parser.add_argument("--before", type=float, default=4.5)
@@ -116,8 +117,9 @@ def main(args):
         overlay = evidence.get("overlay") or {}
         trajectory = (evidence.get("rim_check") or {}).get("trajectory") or overlay.get("trajectory") or []
         rim_width = (overlay.get("rim") or {}).get("width") or (evidence.get("rim_check") or {}).get("rim_width_px") or 80
+        search_roi = args.person_roi or args.roi
         records = scan_window(
-            ball_model, args.video, expanded_roi(args.roi, *candidate["source_size"]),
+            ball_model, args.video, expanded_roi(search_roi, *candidate["source_size"]),
             event_time, 0, args.sample_fps, args.scale, args.conf, ball_device,
             batch=args.batch,
             start_time_override=max(0, event_time - args.before),

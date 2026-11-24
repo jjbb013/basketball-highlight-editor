@@ -38,7 +38,7 @@ def _files(tmp_path: Path):
     return paths
 
 
-def _identify(service, tmp_path, store=None, pipeline=None, pose_exists=True):
+def _identify(service, tmp_path, store=None, pipeline=None, pose_exists=True, person_roi=None):
     paths = _files(tmp_path)
     if not pose_exists:
         paths["pose"].unlink()
@@ -50,6 +50,7 @@ def _identify(service, tmp_path, store=None, pipeline=None, pose_exists=True):
         run_root=tmp_path / "run",
         rows=[_row()],
         source_roi=[0, 0, 100, 100],
+        person_roi=person_roi,
         source_size=[1920, 1080],
         store=store or _Store(),
         on_stage=lambda *_: None,
@@ -100,6 +101,77 @@ def test_identity_command_forwards_source_models_roi_and_device(tmp_path: Path):
     assert command[command.index("--pose-model") + 1] == str(Path("pose.pt").resolve())
     assert command[command.index("--roi") + 1:command.index("--roi") + 5] == ["1", "2", "3", "4"]
     assert command[command.index("--device") + 1] == "mps"
+
+
+def test_person_roi_forwards_to_identify_command_and_splits_cache(tmp_path: Path, monkeypatch):
+    model = LocalIdentityModel()
+    model.observe("identity_will", FEATURES)
+    store = _Store([{
+        "id": "identity_will", "prototype_json": json.dumps(FEATURES),
+        "sample_count": 1, "player_name": "Will",
+    }])
+    captured = {}
+
+    def fake_run(commands, output_path, *_args, **kwargs):
+        command = commands[0]
+        captured["command"] = command
+        input_path = Path(command[command.index("--candidates") + 1])
+        captured["input"] = json.loads(input_path.read_text(encoding="utf-8"))
+        Path(output_path).write_text(json.dumps(_output(model)), encoding="utf-8")
+        return {"refined": _output(model), "logs": ["identified=1"], "cache_hits": 0}
+
+    monkeypatch.setattr("engine.python.basketball_engine.service.run_pipeline", fake_run)
+    pipeline = {"logs": []}
+    _identify(EngineService(), tmp_path, store=store, pipeline=pipeline,
+              person_roi=[10, 20, 300, 400])
+
+    command = captured["command"]
+    assert command[command.index("--person-roi") + 1:command.index("--person-roi") + 5] == [
+        "10", "20", "300", "400",
+    ]
+    assert not any("fallback" in line for line in pipeline["logs"])  # 合法人物区：不回退
+
+    def unexpected_run(*_args, **_kwargs):
+        raise AssertionError("a different person zone must not reuse the cached identity output")
+
+    monkeypatch.setattr("engine.python.basketball_engine.service.run_pipeline", unexpected_run)
+    # 同一份输入 + 不同人物区：缓存 key 必须不同 → 命中不到旧缓存，会重新调用
+    # run_pipeline（被 unexpected_run 拦下，服务层吞掉异常记为 failed）。
+    second_pipeline = {"logs": []}
+    assert _identify(EngineService(), tmp_path, store=store,
+                     pipeline=second_pipeline, person_roi=[50, 60, 700, 800]) is None
+    assert second_pipeline["identity_counts"]["status"] == "failed"
+
+    # 相同人物区：命中缓存，completed 且不触碰 run_pipeline。
+    third_pipeline = {"logs": []}
+    cached = _identify(EngineService(), tmp_path, store=store,
+                       pipeline=third_pipeline, person_roi=[10, 20, 300, 400])
+    assert cached is not None
+    assert third_pipeline["identity_counts"]["status"] == "completed"
+
+
+def test_missing_person_roi_falls_back_to_shot_roi_and_logs(tmp_path: Path, monkeypatch):
+    model = LocalIdentityModel()
+    store = _Store([{
+        "id": "identity_will", "prototype_json": json.dumps(FEATURES),
+        "sample_count": 1, "player_name": "Will",
+    }])
+    captured = {}
+
+    def fake_run(commands, output_path, *_args, **kwargs):
+        command = commands[0]
+        captured["command"] = command
+        input_path = Path(command[command.index("--candidates") + 1])
+        captured["input"] = json.loads(input_path.read_text(encoding="utf-8"))
+        Path(output_path).write_text(json.dumps(_output(model)), encoding="utf-8")
+        return {"refined": _output(model), "logs": ["identified=1"], "cache_hits": 0}
+
+    monkeypatch.setattr("engine.python.basketball_engine.service.run_pipeline", fake_run)
+    pipeline = {"logs": []}
+    _identify(EngineService(), tmp_path, store=store, pipeline=pipeline, person_roi=None)
+
+    assert "--person-roi" not in captured["command"]
+    assert any("person" in line and "fallback" in line for line in pipeline["logs"])
 
 
 def test_identity_analysis_restores_named_prototypes_without_exporting_names(tmp_path: Path, monkeypatch):

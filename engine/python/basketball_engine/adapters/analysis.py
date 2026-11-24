@@ -327,6 +327,7 @@ def build_player_identification_command(
     source_roi: Iterable[float],
     *,
     device: str = "auto",
+    person_roi: Iterable[float] | None = None,
 ) -> list[str]:
     return [
         sys.executable, _script(repo_root, "identify_players.py"),
@@ -336,6 +337,8 @@ def build_player_identification_command(
         "--candidates", str(candidates_path.resolve()),
         "--output", str(output_path.resolve()),
         "--roi", *[str(round(float(value))) for value in source_roi],
+        *( ["--person-roi", *[str(round(float(value))) for value in person_roi]]
+            if person_roi else [] ),
         "--device", device,
     ]
 

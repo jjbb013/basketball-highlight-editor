@@ -60,6 +60,21 @@ from basketball_highlight.rim_check import RIM_CHECK_VERSION
 from basketball_highlight.tracking import link_ball_detections
 
 
+def _parse_person_roi(raw, source_width: int, source_height: int):
+    """解析人物分析区；任何不合法都返回 None（调用方回退投篮分析区扩展范围）。"""
+    if not isinstance(raw, dict) or source_width <= 0 or source_height <= 0:
+        return None
+    try:
+        x1, y1, x2, y2 = (float(raw[key]) for key in ("x1", "y1", "x2", "y2"))
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not all(math.isfinite(value) for value in (x1, y1, x2, y2)):
+        return None
+    if x1 < 0 or y1 < 0 or x2 <= x1 or y2 <= y1:
+        return None
+    if x2 > source_width or y2 > source_height:
+        return None
+    return [x1, y1, x2, y2]
 
 
 class EngineService:
@@ -1701,6 +1716,15 @@ class EngineService:
                     net_roi = [float(raw_net_roi[key]) for key in ("x1", "y1", "x2", "y2")]
                 except (KeyError, TypeError, ValueError):
                     net_roi = None
+            person_roi = _parse_person_roi(
+                calibration.get("person_roi") if isinstance(calibration, dict) else None,
+                source_width,
+                source_height,
+            )
+            if person_roi is None and isinstance(calibration, dict) and calibration.get("person_roi") is not None:
+                log_diagnostic(
+                    f"{label} person_roi invalid, falling back to expanded shot roi"
+                )
             proxy_roi = scale_roi_to_proxy(
                 roi,
                 source_width,
@@ -1987,6 +2011,7 @@ class EngineService:
                     run_root=run_root,
                     rows=rows,
                     source_roi=source_roi,
+                    person_roi=person_roi,
                     source_size=[source_width, source_height],
                     store=store,
                     on_stage=on_stage,
@@ -2122,6 +2147,7 @@ class EngineService:
         job_id: str,
         pipeline: Dict[str, Any],
         device: str = "auto",
+        person_roi: list[float] | None = None,
     ) -> Dict[str, Any] | None:
         """Run optional same-game attribution without risking basketball candidates.
 
@@ -2141,6 +2167,11 @@ class EngineService:
                 pipeline["logs"].append(f"identify_players: model not found: {pose_model_path}")
                 on_stage("identify_players", 0.94)
                 return None
+            if person_roi is None:
+                pipeline["logs"].append(
+                    "identify_players: person_roi missing/invalid; "
+                    "fallback to expanded shot roi"
+                )
             inputs = []
             for row in rows:
                 evidence = json.loads(row.get("evidence_json") or "{}")
@@ -2160,6 +2191,7 @@ class EngineService:
                 "ball_model": {"path": str(model_path), "mtime_ns": model_path.stat().st_mtime_ns},
                 "pose_sha256": hashlib.sha256(pose_model_path.read_bytes()).hexdigest(),
                 "roi": source_roi,
+                "person_roi": person_roi,
             }
             key = hashlib.sha256(
                 json.dumps(key_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -2183,6 +2215,7 @@ class EngineService:
                     [build_player_identification_command(
                         repo_root, source_video, model_path, pose_model_path,
                         input_path, output_path, source_roi, device=device,
+                        person_roi=person_roi,
                     )],
                     output_path,
                     on_stage,
