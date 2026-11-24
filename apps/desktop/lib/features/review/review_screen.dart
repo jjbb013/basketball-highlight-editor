@@ -19,6 +19,7 @@ import '../../components/cs_button.dart';
 import '../../components/cs_empty_state.dart';
 import '../../components/cs_progress_track.dart';
 import 'candidate_status_labels.dart';
+import 'people_review_screen.dart';
 import '../../core/video_orientation.dart';
 import '../../providers/player_groups_provider.dart';
 import '../../components/onboarding_guide.dart';
@@ -43,6 +44,8 @@ const bool reviewVideoAutoPlayAfterSourceSwitch = true;
 const bool reviewVideoAutoPlayAfterCandidateSwitch = true;
 
 /// 审核工作台：视频优先，候选默认保留，用户只需要打叉剔除误检。
+enum _ReviewViewMode { shots, people }
+
 class ReviewScreen extends ConsumerStatefulWidget {
   const ReviewScreen({super.key});
 
@@ -59,6 +62,9 @@ final _reviewGuideMissedKey = GlobalKey(debugLabel: 'review-guide-missed');
 
 class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   String? _selectedCandidateId;
+
+  /// 审核页顶部「投篮 / 人物」切换：人物页按身份分组复核命名，不影响候选列表状态。
+  _ReviewViewMode _viewMode = _ReviewViewMode.shots;
   bool _showOriginalVideo = false;
   final _guideVideoKey = GlobalKey();
   final _guideQueueKey = GlobalKey();
@@ -795,8 +801,48 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                   checkpoint: _decodeJobCheckpoint(job),
                 ),
               ),
+            Padding(
+              key: const Key('review-view-toggle'),
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.xl,
+                Spacing.sm,
+                Spacing.xl,
+                0,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SegmentedButton<_ReviewViewMode>(
+                  key: const Key('review-view-mode'),
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  segments: [
+                    ButtonSegment(
+                      value: _ReviewViewMode.shots,
+                      icon: const Icon(
+                        Icons.play_circle_outline,
+                        size: 15,
+                      ),
+                      label: Text(context.bheText('投篮')),
+                    ),
+                    ButtonSegment(
+                      value: _ReviewViewMode.people,
+                      icon: const Icon(Icons.groups_outlined, size: 15),
+                      label: Text(context.bheText('人物')),
+                    ),
+                  ],
+                  selected: {_viewMode},
+                  onSelectionChanged: (selection) => setState(
+                    () => _viewMode = selection.first,
+                  ),
+                ),
+              ),
+            ),
             Expanded(
-              child: LayoutBuilder(
+              child: _viewMode == _ReviewViewMode.people
+              ? const PeopleReviewScreen()
+              : LayoutBuilder(
                 builder: (context, constraints) {
                   final videoPane = _VideoPane(
                     controller: _videoController,
