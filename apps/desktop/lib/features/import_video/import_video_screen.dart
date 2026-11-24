@@ -2942,11 +2942,15 @@ class _SummaryStep extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: Spacing.xs),
-              Text(
-                value,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: ok ? c.goal : c.warning,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: ok ? c.goal : c.warning,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

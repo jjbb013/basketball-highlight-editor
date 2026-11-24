@@ -126,6 +126,7 @@ Future<_PeopleNotifier> _pumpPeople(
       overrides: [projectProvider.overrideWith(() => notifier)],
       child: MaterialApp.router(
         routerConfig: router,
+        locale: BheLocale.zh,
         localizationsDelegates: BheLocalizations.localizationsDelegates,
         supportedLocales: BheLocalizations.supportedLocales,
       ),
