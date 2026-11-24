@@ -6,7 +6,7 @@ BHE Pro 是 [BHE（Basketball Highlight Editor）](README.md) 的二次开发版
 - 平台：macOS（Apple Silicon + Intel，DMG 安装包）
 - 运行方式不变：完全本地分析，原视频不上传
 
-> 最新已发布的安装包见 [Releases · v0.1.16-macos.3](https://github.com/jjbb013/basketball-highlight-editor/releases/tag/v0.1.16-macos.3)（人物分析区与人物复核页等新功能在此版本之后合入，尚未打包新 Release）。
+> 最新已发布的安装包见 [Releases · v0.1.17-macos.1](https://github.com/jjbb013/basketball-highlight-editor/releases/tag/v0.1.17-macos.1)，包含人物分析区、人物复核页、跨天合并导出、视频封面与背景音乐。
 
 ## 与原版 BHE 的差异一览
 
