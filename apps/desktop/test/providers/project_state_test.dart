@@ -1220,6 +1220,136 @@ void main() {
     });
   });
 
+  group('ProjectNotifier personRoi', () {
+    test('saveRoi 把人物区写入 calibration（源像素）并更新状态', () async {
+      final fakeSession = _FakeProjectSession();
+      final container = ProviderContainer(
+        overrides: <Override>[
+          projectSessionProvider.overrideWithValue(fakeSession),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(projectProvider.notifier);
+      await notifier.selectVideo('/path/sample.mp4');
+      const personRoi = Rect.fromLTWH(0.0, 0.25, 1.0, 0.5);
+      final saved = await notifier.saveRoi(
+        const Rect.fromLTWH(0.1, 0.1, 0.3, 0.3),
+        personRoi: personRoi,
+      );
+
+      expect(saved, isTrue);
+      final calibration = fakeSession.lastSaveRoiCalibration!;
+      expect(
+        calibration['person_roi'],
+        <String, double>{'x1': 0, 'y1': 270, 'x2': 1920, 'y2': 810},
+      );
+      expect(container.read(projectProvider).personRoi, personRoi);
+    });
+
+    test('openProject 从 calibration 恢复人物区', () async {
+      final tempVideo = File(
+        '${Directory.systemTemp.path}/bhe_person_roi_open_project_test.mp4',
+      )..writeAsBytesSync(<int>[]);
+      addTearDown(tempVideo.deleteSync);
+      final fakeSession = _FakeProjectSession()
+        ..openProjectVideo = <String, dynamic>{
+          'id': 'vid-1',
+          'source_path': tempVideo.path,
+          'duration_ms': 5000,
+          'width': 1920,
+          'height': 1080,
+        }
+        ..openProjectRoi = <String, dynamic>{
+          'x1': 0,
+          'y1': 0,
+          'x2': 1920,
+          'y2': 1080,
+          'calibration': <String, dynamic>{
+            'person_roi': <String, dynamic>{
+              'x1': 192,
+              'y1': 270,
+              'x2': 1728,
+              'y2': 810,
+            },
+          },
+        };
+      final container = ProviderContainer(
+        overrides: <Override>[
+          projectSessionProvider.overrideWithValue(fakeSession),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(projectProvider.notifier);
+      expect(await notifier.openProject('/project'), isTrue);
+      expect(
+        container.read(projectProvider).personRoi,
+        const Rect.fromLTWH(0.1, 0.25, 0.8, 0.5),
+      );
+    });
+
+    test('openProject 没有 person_roi 时人物区为 null', () async {
+      final fakeSession = _FakeProjectSession();
+      final container = ProviderContainer(
+        overrides: <Override>[
+          projectSessionProvider.overrideWithValue(fakeSession),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(projectProvider.notifier);
+      expect(await notifier.openProject('/project'), isTrue);
+      expect(container.read(projectProvider).personRoi, isNull);
+    });
+
+    test('applyWorkflowDraft 把草稿人物区写入 calibration', () async {
+      final fakeSession = _FakeProjectSession();
+      final container = ProviderContainer(
+        overrides: <Override>[
+          projectSessionProvider.overrideWithValue(fakeSession),
+          engineBootstrapProvider.overrideWith(_StubEngineBootstrap.new),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(projectProvider.notifier);
+      await notifier.selectVideo('/path/sample.mp4');
+      final applied = await notifier.applyWorkflowDraft(<String, dynamic>{
+        'version': 4,
+        'roi': <String, dynamic>{'x1': 0.1, 'y1': 0.1, 'x2': 0.4, 'y2': 0.4},
+        'net_roi': <String, dynamic>{
+          'x1': 0.4,
+          'y1': 0.05,
+          'x2': 0.6,
+          'y2': 0.15,
+        },
+        'person_roi': <String, dynamic>{
+          'x1': 0.0,
+          'y1': 0.25,
+          'x2': 1.0,
+          'y2': 0.75,
+        },
+        'analysis_range': <String, dynamic>{'start_ms': 0, 'end_ms': 5000},
+        'analysis_mode': 'standard',
+      });
+
+      expect(applied, isTrue);
+      final calibration = fakeSession.lastSaveRoiCalibration!;
+      expect(
+        calibration['person_roi'],
+        <String, double>{'x1': 0, 'y1': 270, 'x2': 1920, 'y2': 810},
+      );
+      expect(
+        container.read(projectProvider).personRoi,
+        const Rect.fromLTWH(0.0, 0.25, 1.0, 0.5),
+      );
+    });
+  });
+
   group('ProjectNotifier.export', () {
     test('后台导出不会锁死后续审核操作', () async {
       final fakeSession = _FakeProjectSession()
@@ -1789,12 +1919,17 @@ class _FakeProjectSession extends ProjectSession {
     return <String, dynamic>{'deleted': true};
   }
 
+  JsonMap? openProjectVideo;
+  JsonMap? openProjectRoi;
+
   @override
   Future<JsonMap> openProject(String projectRoot) async {
     if (throwOnOpenProject) throw StateError('invalid project');
     return <String, dynamic>{
       'project_root': projectRoot,
       'project': <String, dynamic>{'id': 'proj-1'},
+      if (openProjectVideo != null) 'video': openProjectVideo,
+      if (openProjectRoi != null) 'roi': openProjectRoi,
     };
   }
 
@@ -1851,6 +1986,8 @@ class _FakeProjectSession extends ProjectSession {
     };
   }
 
+  JsonMap? lastSaveRoiCalibration;
+
   @override
   Future<JsonMap> saveRoi({
     required num x1,
@@ -1862,8 +1999,21 @@ class _FakeProjectSession extends ProjectSession {
     String? videoId,
   }) async {
     if (throwOnSaveRoi) throw StateError('save_roi failed');
+    lastSaveRoiCalibration = calibration;
     return <String, dynamic>{};
   }
+
+  @override
+  Future<JsonMap> setAnalysisRange({
+    required int startMs,
+    required int endMs,
+  }) async => <String, dynamic>{};
+
+  @override
+  Future<JsonMap> clearWorkflowDraft() async => <String, dynamic>{};
+
+  @override
+  Future<JsonMap> setAnalysisMode(String mode) async => <String, dynamic>{};
 
   @override
   Future<JsonMap> startAnalysis({

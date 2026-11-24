@@ -87,6 +87,7 @@ class ProjectState {
     this.previewRefreshing = false,
     this.suggestedRoi,
     this.netRoi,
+    this.personRoi,
     this.hoopBbox,
     this.roiSource,
     this.roiConfidence,
@@ -127,6 +128,11 @@ class ProjectState {
   final bool previewRefreshing;
   final Rect? suggestedRoi;
   final Rect? netRoi;
+
+  /// 人物分析区（可选）：优先用于人物检测与最后触球搜索框，
+  /// 存于 roi.calibration.person_roi（源像素）。null = 未设置，引擎回退投篮区扩展范围。
+  final Rect? personRoi;
+
   final Rect? hoopBbox;
   final String? roiSource;
   final double? roiConfidence;
@@ -202,6 +208,7 @@ class ProjectState {
     bool? previewRefreshing,
     Object? suggestedRoi = _unset,
     Object? netRoi = _unset,
+    Object? personRoi = _unset,
     Object? hoopBbox = _unset,
     Object? roiSource = _unset,
     Object? roiConfidence = _unset,
@@ -250,6 +257,7 @@ class ProjectState {
           ? this.suggestedRoi
           : suggestedRoi as Rect?,
       netRoi: identical(netRoi, _unset) ? this.netRoi : netRoi as Rect?,
+      personRoi: identical(personRoi, _unset) ? this.personRoi : personRoi as Rect?,
       hoopBbox: identical(hoopBbox, _unset) ? this.hoopBbox : hoopBbox as Rect?,
       roiSource: identical(roiSource, _unset)
           ? this.roiSource
@@ -508,6 +516,7 @@ class ProjectNotifier extends Notifier<ProjectState> {
         previewRefreshing: false,
         suggestedRoi: null,
         netRoi: null,
+        personRoi: null,
         hoopBbox: null,
         roiSource: null,
         roiConfidence: null,
@@ -720,9 +729,11 @@ class ProjectNotifier extends Notifier<ProjectState> {
           ?.cast<String, dynamic>();
 
       final net = _draftRect(draft['net_roi']);
+      final person = _draftRect(draft['person_roi']);
       final hoop = _draftRect(draft['hoop_bbox']);
       final mappedRoi = roi;
       final mappedNet = net;
+      final mappedPerson = person;
       final mappedHoop = hoop;
       final nextWidth = ((video['width'] as num?)?.toDouble() ?? 1).clamp(
         1,
@@ -749,6 +760,14 @@ class ProjectNotifier extends Notifier<ProjectState> {
           'y2': mappedNet.bottom * nextHeight,
         };
       }
+      if (mappedPerson != null) {
+        calibration['person_roi'] = <String, double>{
+          'x1': mappedPerson.left * nextWidth,
+          'y1': mappedPerson.top * nextHeight,
+          'x2': mappedPerson.right * nextWidth,
+          'y2': mappedPerson.bottom * nextHeight,
+        };
+      }
       await session.saveRoi(
         x1: mappedRoi.left * nextWidth,
         y1: mappedRoi.top * nextHeight,
@@ -769,6 +788,7 @@ class ProjectNotifier extends Notifier<ProjectState> {
         suggestedRoi: mappedRoi,
         hoopBbox: mappedHoop,
         netRoi: mappedNet,
+        personRoi: mappedPerson,
         roiSource: 'manual',
         roiConfidence: null,
         roiSuggestionError: null,
@@ -821,6 +841,7 @@ class ProjectNotifier extends Notifier<ProjectState> {
         previewTimeMs: invalidated ? 1000 : state.previewTimeMs,
         suggestedRoi: invalidated ? null : state.suggestedRoi,
         netRoi: invalidated ? null : state.netRoi,
+        personRoi: invalidated ? null : state.personRoi,
         hoopBbox: invalidated ? null : state.hoopBbox,
         roiSource: invalidated ? null : state.roiSource,
         roiConfidence: invalidated ? null : state.roiConfidence,
@@ -1159,6 +1180,7 @@ class ProjectNotifier extends Notifier<ProjectState> {
           ? null
           : _normalizeRoi(restoredRoi, video);
       final storedNetRoi = calibration?['net_roi'];
+      final storedPersonRoi = calibration?['person_roi'];
       final rawHoopBbox = calibration?['hoop_bbox'];
       final restoredHoopBbox = video == null || rawHoopBbox is! List
           ? null
@@ -1166,6 +1188,9 @@ class ProjectNotifier extends Notifier<ProjectState> {
       final restoredNetRoi = video == null || storedNetRoi is! Map
           ? null
           : _normalizeRoi(storedNetRoi.cast<String, dynamic>(), video);
+      final restoredPersonRoi = video == null || storedPersonRoi is! Map
+          ? null
+          : _normalizeRoi(storedPersonRoi.cast<String, dynamic>(), video);
       final restoredRoiSource = calibration?['source']?.toString() ?? 'manual';
       _applyVideoContext(payload);
       final openedVideos = ((payload['videos'] as List?) ?? const <dynamic>[])
@@ -1204,6 +1229,7 @@ class ProjectNotifier extends Notifier<ProjectState> {
         previewRefreshing: false,
         suggestedRoi: restoredRoiRect,
         netRoi: restoredNetRoi,
+        personRoi: restoredPersonRoi,
         hoopBbox: restoredHoopBbox,
         roiSource: restoredRoiRect == null ? null : restoredRoiSource,
         roiConfidence: (calibration?['confidence'] as num?)?.toDouble(),
@@ -1476,6 +1502,7 @@ class ProjectNotifier extends Notifier<ProjectState> {
     final roi = (summary['roi'] as Map?)?.cast<String, dynamic>();
     final calibration = (roi?['calibration'] as Map?)?.cast<String, dynamic>();
     final net = calibration?['net_roi'];
+    final person = calibration?['person_roi'];
     final hoop = calibration?['hoop_bbox'];
     state = state.copyWith(
       video: video,
@@ -1489,6 +1516,9 @@ class ProjectNotifier extends Notifier<ProjectState> {
       suggestedRoi: roi == null ? null : _normalizeRoi(roi, video),
       netRoi: net is Map
           ? _normalizeRoi(net.cast<String, dynamic>(), video)
+          : null,
+      personRoi: person is Map
+          ? _normalizeRoi(person.cast<String, dynamic>(), video)
           : null,
       hoopBbox: hoop is List ? _normalizeBbox(hoop, video) : null,
       roiSource: roi == null
@@ -1863,6 +1893,7 @@ class ProjectNotifier extends Notifier<ProjectState> {
   Future<bool> saveRoi(
     Rect normalized, {
     Rect? netRoi,
+    Rect? personRoi,
     bool showNotice = true,
   }) async {
     var saved = false;
@@ -1892,6 +1923,14 @@ class ProjectNotifier extends Notifier<ProjectState> {
           'y2': netRoi.bottom * height,
         };
       }
+      if (personRoi != null) {
+        calibration['person_roi'] = <String, double>{
+          'x1': personRoi.left * width,
+          'y1': personRoi.top * height,
+          'x2': personRoi.right * width,
+          'y2': personRoi.bottom * height,
+        };
+      }
       await ref
           .read(projectSessionProvider)
           .saveRoi(
@@ -1904,6 +1943,7 @@ class ProjectNotifier extends Notifier<ProjectState> {
       state = state.copyWith(
         roiSource: 'manual',
         netRoi: netRoi,
+        personRoi: personRoi,
         roiConfidence: null,
         roiSuggestionError: null,
       );
