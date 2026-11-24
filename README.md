@@ -6,6 +6,8 @@ BHE 是一个篮球集锦工具。导入固定机位拍摄的比赛录像，它�
 
 BHE 在自己的电脑或安卓手机上分析，先把疑似进球排好队，你只需排除误检。免费、本地运行，原视频不上传。
 
+> 二次开发版本 **BHE Pro**（macOS 增强版：视频封面、背景音乐、球员身份识别、跨天合并导出）见 [README-BHE-PRO.md](README-BHE-PRO.md)。
+
 [![Latest tag](https://img.shields.io/github/v/tag/fly7632785/basketball-highlight-editor?include_prereleases&style=flat-square&label=latest%20tag)](https://github.com/fly7632785/basketball-highlight-editor/tags)
 [![License](https://img.shields.io/github/license/fly7632785/basketball-highlight-editor?style=flat-square)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Android%20%7C%20iOS-4c6ef5?style=flat-square)
