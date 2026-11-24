@@ -101,6 +101,14 @@ String? _translateDynamic(String source) {
   }
   final volumePercent = RegExp(r'^音量 (\d+)%$').firstMatch(source);
   if (volumePercent != null) return 'Volume ${volumePercent.group(1)}%';
+  final peopleGroupSummary = RegExp(
+    r'^(\d+) 个进球 · 触球 (.+)$',
+  ).firstMatch(source);
+  if (peopleGroupSummary != null) {
+    return '${peopleGroupSummary.group(1)} made shots · touched ${peopleGroupSummary.group(2)}';
+  }
+  final peopleTouch = RegExp(r'^触球 (.+)$').firstMatch(source);
+  if (peopleTouch != null) return 'Touch ${peopleTouch.group(1)}';
   final coverDuration = RegExp(r'^封面时长 (\d+) 秒$').firstMatch(source);
   if (coverDuration != null)
     return 'Cover duration: ${coverDuration.group(1)} seconds';
@@ -1736,4 +1744,34 @@ const _englishText = <String, String>{
   '选择本地音乐': 'Choose local music',
   '清除本地音乐': 'Clear local music',
   '可选历史项目': 'Optional historical projects',
+  // Person analysis zone (import calibration)
+  '人物分析区': 'Person analysis zone',
+  '人物分析区（可选）': 'Person zone (optional)',
+  '未设置，自动回退投篮区': 'Not set; falls back to the shot zone',
+  '清除人物区': 'Clear person zone',
+  '当前编辑紫色人物分析区域（可选）：覆盖画面中球员活动范围，人物识别与最后触球分析会优先使用；不设置则自动用投篮分析区。':
+      'Editing the purple person analysis zone (optional): cover where players move. Player identification and last-touch analysis prefer this zone; if unset, the shot zone is used automatically.',
+  // People review page
+  '投篮': 'Shots',
+  '人物': 'People',
+  '全部身份': 'All identities',
+  '待复核': 'Needs review',
+  '已命名': 'Named',
+  '自动推测': 'Auto-detected',
+  '身份待复核': 'Identity needs review',
+  '含人工标记': 'Includes manual marks',
+  '命名为球员': 'Name as player',
+  '查看投篮片段': 'View shot clips',
+  '修正此条': 'Adjust this entry',
+  '清除修正': 'Clear adjustment',
+  '确认命名': 'Confirm name',
+  '例如：Will': 'e.g. Will',
+  '时间未知': 'Time unknown',
+  '当前筛选下没有身份组。': 'No identity groups under this filter.',
+  '这段视频还没有人物识别结果。分析时开启人物识别后，这里会按身份分组展示。':
+      'No player identification results for this video yet. Enable player identification during analysis and identity groups will appear here.',
+  '自动按当场外观（体型、发型、衣着）分组，命名后会标出同身份的进球；请人工复核后再导出。':
+      'Groups are formed by appearance (build, hairstyle, clothing). Naming one labels every made shot from the same identity; review before exporting.',
+  '将这一当场身份的所有自动进球标记为同一名球员；人工改派的片段不会被覆盖。':
+      'Marks every automatic shot from this identity as the same player. Manually reassigned clips are not overwritten.',
 };

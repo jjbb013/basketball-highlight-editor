@@ -228,4 +228,60 @@ void main() {
       startsWith('Python runtime not found.'),
     );
   });
+
+  testWidgets('translates person zone and people review copy', (tester) async {
+    late BheLocalizations english;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: BheLocalizations.localizationsDelegates,
+        supportedLocales: BheLocalizations.supportedLocales,
+        locale: BheLocale.en,
+        home: Builder(
+          builder: (context) {
+            english = BheLocalizations.of(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    expect(english.text('人物分析区'), 'Person analysis zone');
+    expect(english.text('人物分析区（可选）'), 'Person zone (optional)');
+    expect(
+      english.text('未设置，自动回退投篮区'),
+      'Not set; falls back to the shot zone',
+    );
+    expect(english.text('清除人物区'), 'Clear person zone');
+    expect(
+      english.text('当前编辑紫色人物分析区域（可选）：覆盖画面中球员活动范围，人物识别与最后触球分析会优先使用；不设置则自动用投篮分析区。'),
+      startsWith('Editing the purple person analysis zone (optional):'),
+    );
+    expect(english.text('投篮'), 'Shots');
+    expect(english.text('人物'), 'People');
+    expect(english.text('全部身份'), 'All identities');
+    expect(english.text('待复核'), 'Needs review');
+    expect(english.text('已命名'), 'Named');
+    expect(english.text('自动推测'), 'Auto-detected');
+    expect(english.text('身份待复核'), 'Identity needs review');
+    expect(english.text('含人工标记'), 'Includes manual marks');
+    expect(english.text('命名为球员'), 'Name as player');
+    expect(english.text('查看投篮片段'), 'View shot clips');
+    expect(english.text('修正此条'), 'Adjust this entry');
+    expect(english.text('清除修正'), 'Clear adjustment');
+    expect(english.text('确认命名'), 'Confirm name');
+    expect(english.text('例如：Will'), 'e.g. Will');
+    expect(english.text('时间未知'), 'Time unknown');
+    expect(
+      english.text('当前筛选下没有身份组。'),
+      'No identity groups under this filter.',
+    );
+    expect(
+      english.text('触球 0:03.0'),
+      'Touch 0:03.0',
+    );
+    expect(
+      english.text('2 个进球 · 触球 0:03.0 ~ 0:09.0'),
+      '2 made shots · touched 0:03.0 ~ 0:09.0',
+    );
+  });
 }
