@@ -39,6 +39,12 @@ import '../../core/draft_flush_registry.dart';
 const _beforeSecondOptions = <int>[0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15];
 const _afterSecondOptions = <int>[1, 2, 3, 4, 5, 6, 8, 10, 12, 15];
 
+/// 导入页检测步骤里正在被编辑的区域。人物区可选，不设时引擎回退投篮区扩展范围。
+enum _RoiEditTarget { shot, net, person }
+
+/// 人物分析区的标识色（主题里没有现成紫色）。
+const _personRoiColor = Color(0xFFB388FF);
+
 /// 全页面配置向导：视频 → 分析范围 → 检测区域 → 确认并开始分析。
 ///
 /// 所有编辑先写入 workflowDraft，只有最后一步才写入项目生效配置并启动分析。
@@ -71,12 +77,14 @@ class _ImportVideoScreenState extends ConsumerState<ImportVideoScreen> {
   bool _showExistingDraft = false;
   Rect? _roi;
   Rect? _netRoi;
+  Rect? _personRoi;
   Rect? _hoopBbox;
   Rect? _autoRoi;
   Rect? _autoNetRoi;
   Rect? _autoHoopBbox;
   bool _netUserEdited = false;
-  bool _editingNet = false;
+  bool _personUserEdited = false;
+  _RoiEditTarget _editingTarget = _RoiEditTarget.shot;
   int _analysisStartMs = 0;
   bool _rangeTouched = false;
   int _analysisEndMs = 0;
@@ -173,8 +181,10 @@ class _ImportVideoScreenState extends ConsumerState<ImportVideoScreen> {
     _roi = state.suggestedRoi;
     _netRoi = state.netRoi ?? recommendedNetRoi(_roi, state.hoopBbox);
     _netUserEdited = state.netRoi != null;
+    _personRoi = state.personRoi;
+    _personUserEdited = state.personRoi != null;
     _hoopBbox = state.hoopBbox;
-    _editingNet = false;
+    _editingTarget = _RoiEditTarget.shot;
     // 导入流程(含自动识别)在后台 await 期间用户可能已调整分析范围,
     // 完成后的状态同步不得覆盖用户手选的范围。
     if (!_rangeTouched) {
@@ -190,6 +200,7 @@ class _ImportVideoScreenState extends ConsumerState<ImportVideoScreen> {
   void _applyDraftLocally(JsonMap draft) {
     final roi = _rectFromJson(draft['roi']);
     final net = _rectFromJson(draft['net_roi']);
+    final person = _rectFromJson(draft['person_roi']);
     final hoop = _rectFromJson(draft['hoop_bbox']);
     final autoRoi = _rectFromJson(draft['auto_roi']);
     final autoNetRoi = _rectFromJson(draft['auto_net_roi']);
@@ -200,6 +211,7 @@ class _ImportVideoScreenState extends ConsumerState<ImportVideoScreen> {
       _step = savedStep.clamp(0, _stepCount - 1);
       _roi = roi ?? _roi;
       _netRoi = net ?? _netRoi;
+      _personRoi = person ?? _personRoi;
       _hoopBbox = hoop ?? _hoopBbox;
       _autoRoi = autoRoi ?? _autoRoi;
       _autoNetRoi = autoNetRoi ?? _autoNetRoi;
@@ -221,6 +233,10 @@ class _ImportVideoScreenState extends ConsumerState<ImportVideoScreen> {
       _analysisMode = mode == 'fast' ? 'fast' : 'standard';
       final netSource = draft['net_roi_source']?.toString();
       _netUserEdited = netSource == null ? net != null : netSource == 'manual';
+      final personSource = draft['person_roi_source']?.toString();
+      _personUserEdited = personSource == null
+          ? person != null
+          : personSource == 'manual';
       // 草稿范围成为新基线,用户之后的调整重新生效。
       _rangeTouched = range?['start_ms'] != null || range?['end_ms'] != null;
     });
@@ -235,8 +251,10 @@ class _ImportVideoScreenState extends ConsumerState<ImportVideoScreen> {
     'before_seconds': _beforeSeconds,
     'after_seconds': _afterSeconds,
     'net_roi_source': _netUserEdited ? 'manual' : 'auto',
+    'person_roi_source': _personUserEdited ? 'manual' : 'none',
     ...?_rectMap('roi', _roi),
     ...?_rectMap('net_roi', _netRoi),
+    ...?_rectMap('person_roi', _personRoi),
     ...?_rectMap('hoop_bbox', _hoopBbox),
     ...?_rectMap('auto_roi', _autoRoi),
     ...?_rectMap('auto_net_roi', _autoNetRoi),
@@ -256,8 +274,10 @@ class _ImportVideoScreenState extends ConsumerState<ImportVideoScreen> {
       'before_seconds': _beforeSeconds,
       'after_seconds': _afterSeconds,
       'net_roi_source': _netUserEdited ? 'manual' : 'auto',
+      'person_roi_source': _personUserEdited ? 'manual' : 'none',
       ...?_rectMap('roi', _roi),
       ...?_rectMap('net_roi', _netRoi),
+      ...?_rectMap('person_roi', _personRoi),
       ...?_rectMap('hoop_bbox', _hoopBbox),
       ...?_rectMap('auto_roi', _autoRoi),
       ...?_rectMap('auto_net_roi', _autoNetRoi),
@@ -918,12 +938,14 @@ class _ImportVideoScreenState extends ConsumerState<ImportVideoScreen> {
           _step = 0;
           _roi = null;
           _netRoi = null;
+          _personRoi = null;
           _hoopBbox = null;
           _autoRoi = null;
           _autoNetRoi = null;
           _autoHoopBbox = null;
           _netUserEdited = false;
-          _editingNet = false;
+          _personUserEdited = false;
+          _editingTarget = _RoiEditTarget.shot;
           _analysisStartMs = 0;
           _analysisEndMs = 0;
         });
@@ -935,7 +957,8 @@ class _ImportVideoScreenState extends ConsumerState<ImportVideoScreen> {
       _autoNetRoi = null;
       _autoHoopBbox = null;
       _netUserEdited = false;
-      _editingNet = false;
+      _personUserEdited = false;
+      _editingTarget = _RoiEditTarget.shot;
       _rangeTouched = false;
       _syncFromState(next);
       final editing = _editingVideoId == nextVideoId;
@@ -1473,11 +1496,13 @@ KeyedSubtree(
           hoopBbox: hoopBbox,
           roi: _roi,
           netRoi: _netRoi,
-          editingNet: _editingNet,
+          personRoi: _personRoi,
+          editingTarget: _editingTarget,
           enabled: state.video != null && !busy,
           aspectRatio: sourceWidth / sourceHeight,
           rotation: (state.video?['rotation'] as num?)?.toInt() ?? 0,
-          onEditNetChanged: (value) => setState(() => _editingNet = value),
+          onEditTargetChanged: (value) =>
+              setState(() => _editingTarget = value),
           onPreviewTimeChanged: (timeMs) {
             // 检测区域步骤由播放器即时 seek 呈现,这里只同步时间到
             // 状态与草稿,不再触发引擎抽帧(大视频上每次抽帧 1-2 秒)。
@@ -1489,44 +1514,60 @@ KeyedSubtree(
           previewPlaying: _previewPlaying,
           onChanged: (value) {
             setState(() {
-              if (_editingNet) {
-                _netRoi = value;
-                _netUserEdited = true;
-              } else {
-                _roi = value;
-                if (!_netUserEdited) {
-                  _netRoi = recommendedNetRoi(value, hoopBbox);
-                }
+              switch (_editingTarget) {
+                case _RoiEditTarget.net:
+                  _netRoi = value;
+                  _netUserEdited = true;
+                case _RoiEditTarget.person:
+                  _personRoi = value;
+                  _personUserEdited = true;
+                case _RoiEditTarget.shot:
+                  _roi = value;
+                  if (!_netUserEdited) {
+                    _netRoi = recommendedNetRoi(value, hoopBbox);
+                  }
               }
             });
             // 拖动中每帧都会回调，这里按 1 秒节流，只记区域大小比例，不记画面。
+            final targetLabel = switch (_editingTarget) {
+              _RoiEditTarget.net => 'net',
+              _RoiEditTarget.person => 'person',
+              _RoiEditTarget.shot => 'hoop',
+            };
             appLogThrottled(
-              'import-roi-${_editingNet ? 'net' : 'hoop'}',
+              'import-roi-$targetLabel',
               'info',
               'import',
-              '修改${_editingNet ? '篮网' : '篮筐'}区域 ${_rectLog(value)} 已经用户编辑=${_editingNet || _netUserEdited}',
+              '修改$targetLabel区域 ${_rectLog(value)} 已经用户编辑=${_personUserEdited || _netUserEdited}',
             );
             _scheduleDraftSave();
           },
           onResetCurrent: () {
             setState(() {
-              if (_editingNet) {
-                _netRoi =
-                    _autoNetRoi ??
-                    recommendedNetRoi(
-                      _autoRoi ?? _roi,
-                      _autoHoopBbox ?? state.hoopBbox,
-                    ) ??
-                    recommendedNetRoi(_roi, state.hoopBbox);
-                _netUserEdited = false;
-              } else if (_autoRoi != null) {
-                _roi = _autoRoi;
-                _hoopBbox = _autoHoopBbox;
-                if (!_netUserEdited) {
+              switch (_editingTarget) {
+                case _RoiEditTarget.net:
                   _netRoi =
                       _autoNetRoi ??
-                      recommendedNetRoi(_autoRoi, _autoHoopBbox);
-                }
+                      recommendedNetRoi(
+                        _autoRoi ?? _roi,
+                        _autoHoopBbox ?? state.hoopBbox,
+                      ) ??
+                      recommendedNetRoi(_roi, state.hoopBbox);
+                  _netUserEdited = false;
+                case _RoiEditTarget.person:
+                  // 人物区没有自动推荐，「恢复」即清除，回到未设置状态。
+                  _personRoi = null;
+                  _personUserEdited = false;
+                case _RoiEditTarget.shot:
+                  if (_autoRoi != null) {
+                    _roi = _autoRoi;
+                    _hoopBbox = _autoHoopBbox;
+                    if (!_netUserEdited) {
+                      _netRoi =
+                          _autoNetRoi ??
+                          recommendedNetRoi(_autoRoi, _autoHoopBbox);
+                    }
+                  }
               }
             });
             _scheduleDraftSave();
@@ -1539,6 +1580,7 @@ KeyedSubtree(
           endMs: _analysisEndMs,
           roi: _roi,
           netRoi: _netRoi,
+          personRoi: _personRoi,
           analysisMode: _analysisMode,
           beforeSeconds: _beforeSeconds,
           afterSeconds: _afterSeconds,
@@ -2171,10 +2213,11 @@ class _DetectionStep extends ConsumerStatefulWidget {
     required this.hoopBbox,
     required this.roi,
     required this.netRoi,
-    required this.editingNet,
+    required this.personRoi,
+    required this.editingTarget,
     required this.enabled,
     required this.aspectRatio,
-    required this.onEditNetChanged,
+    required this.onEditTargetChanged,
     required this.onPreviewTimeChanged,
     required this.onPreviewPlaybackToggled,
     required this.onRefreshPreview,
@@ -2187,11 +2230,14 @@ class _DetectionStep extends ConsumerStatefulWidget {
   final Rect? hoopBbox;
   final Rect? roi;
   final Rect? netRoi;
-  final bool editingNet;
+  final Rect? personRoi;
+
+  /// 当前正在编辑的区域；人物区是可选第三区域。
+  final _RoiEditTarget editingTarget;
   final bool enabled;
   final double aspectRatio;
   final int rotation;
-  final ValueChanged<bool> onEditNetChanged;
+  final ValueChanged<_RoiEditTarget> onEditTargetChanged;
   final ValueChanged<int> onPreviewTimeChanged;
   final VoidCallback onPreviewPlaybackToggled;
   final VoidCallback onRefreshPreview;
@@ -2396,7 +2442,7 @@ class _DetectionStepState extends ConsumerState<_DetectionStep> {
       title: context.bheText('检测区域'),
       icon: LucideIcons.target,
       subtitle: context.bheText(
-        '系统会先自动识别篮筐。橙色区域用于球轨迹，白色区域只覆盖篮网摆动范围；拖动或缩放后会自动保存到草稿。',
+        '系统会先自动识别篮筐。橙色区域用于球轨迹，白色区域只覆盖篮网摆动范围，紫色人物分析区可选、用于人物识别与最后触球分析；拖动或缩放后会自动保存到草稿。',
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2432,13 +2478,54 @@ KeyedSubtree(
             previewPath: state.previewPath,
             aspectRatio: widget.aspectRatio,
             rotation: widget.rotation,
-            roi: widget.editingNet ? widget.netRoi : widget.roi,
-            secondaryRoi: widget.editingNet ? widget.roi : widget.netRoi,
-            activeColor: widget.editingNet ? Colors.white : c.orange,
-            secondaryColor: widget.editingNet ? c.orange : Colors.white,
-            activeLabel: context.bheText(widget.editingNet ? '篮网检测区' : '投篮分析区'),
+            roi: switch (widget.editingTarget) {
+              _RoiEditTarget.shot => widget.roi,
+              _RoiEditTarget.net => widget.netRoi,
+              _RoiEditTarget.person => widget.personRoi,
+            },
+            secondaryRoi: switch (widget.editingTarget) {
+              _RoiEditTarget.shot => widget.netRoi,
+              _RoiEditTarget.net => widget.roi,
+              _RoiEditTarget.person => widget.roi,
+            },
+            tertiaryRoi: switch (widget.editingTarget) {
+              _RoiEditTarget.shot ||
+              _RoiEditTarget.net => widget.personRoi,
+              _RoiEditTarget.person => widget.netRoi,
+            },
+            activeColor: switch (widget.editingTarget) {
+              _RoiEditTarget.shot => c.orange,
+              _RoiEditTarget.net => Colors.white,
+              _RoiEditTarget.person => _personRoiColor,
+            },
+            secondaryColor: switch (widget.editingTarget) {
+              _RoiEditTarget.shot => Colors.white,
+              _RoiEditTarget.net => c.orange,
+              _RoiEditTarget.person => c.orange,
+            },
+            tertiaryColor: switch (widget.editingTarget) {
+              _RoiEditTarget.shot ||
+              _RoiEditTarget.net => _personRoiColor,
+              _RoiEditTarget.person => Colors.white,
+            },
+            activeLabel: context.bheText(switch (widget.editingTarget) {
+              _RoiEditTarget.shot => '投篮分析区',
+              _RoiEditTarget.net => '篮网检测区',
+              _RoiEditTarget.person => '人物分析区',
+            }),
             secondaryLabel: context.bheText(
-              widget.editingNet ? '投篮分析区' : '篮网检测区',
+              switch (widget.editingTarget) {
+                _RoiEditTarget.shot => '篮网检测区',
+                _RoiEditTarget.net => '投篮分析区',
+                _RoiEditTarget.person => '投篮分析区',
+              },
+            ),
+            tertiaryLabel: context.bheText(
+              switch (widget.editingTarget) {
+                _RoiEditTarget.shot ||
+                _RoiEditTarget.net => '人物分析区',
+                _RoiEditTarget.person => '篮网检测区',
+              },
             ),
             onRefreshPreview: widget.onRefreshPreview,
             onChanged: widget.onChanged,
@@ -2489,53 +2576,78 @@ KeyedSubtree(
           const SizedBox(height: Spacing.sm),
           KeyedSubtree(
             key: _importGuideRegionKey,
-            child: Row(
+            child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _CalibrationTargetButton(
-                index: '1',
-                label: context.bheText('投篮分析区'),
-                color: c.orange,
-                selected: !widget.editingNet,
-                onPressed: widget.enabled
-                    ? () => widget.onEditNetChanged(false)
-                    : null,
+              Wrap(
+                spacing: Spacing.sm,
+                runSpacing: Spacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _CalibrationTargetButton(
+                    index: '1',
+                    label: context.bheText('投篮分析区'),
+                    color: c.orange,
+                    selected: widget.editingTarget == _RoiEditTarget.shot,
+                    onPressed: widget.enabled
+                        ? () => widget.onEditTargetChanged(_RoiEditTarget.shot)
+                        : null,
+                  ),
+                  _CalibrationTargetButton(
+                    index: '2',
+                    label: context.bheText('篮网检测区'),
+                    color: Colors.white,
+                    selected: widget.editingTarget == _RoiEditTarget.net,
+                    onPressed: widget.enabled
+                        ? () => widget.onEditTargetChanged(_RoiEditTarget.net)
+                        : null,
+                  ),
+                  _CalibrationTargetButton(
+                    index: '3',
+                    label: context.bheText('人物分析区'),
+                    color: _personRoiColor,
+                    selected: widget.editingTarget == _RoiEditTarget.person,
+                    onPressed: widget.enabled
+                        ? () => widget.onEditTargetChanged(_RoiEditTarget.person)
+                        : null,
+                  ),
+                ],
               ),
-              const SizedBox(width: Spacing.sm),
-              _CalibrationTargetButton(
-                index: '2',
-                label: context.bheText('篮网检测区'),
-                color: Colors.white,
-                selected: widget.editingNet,
-                onPressed: widget.enabled
-                    ? () => widget.onEditNetChanged(true)
-                    : null,
-              ),
-              const Spacer(),
-              TextButton.icon(
-                key: const Key('hoop-example-open'),
-                onPressed: () => showHoopExampleDialog(context),
-                icon: const Icon(Icons.image_outlined, size: 16),
-                label: Text(context.bheText('看示例')),
-              ),
-              TextButton.icon(
-                onPressed: widget.enabled ? widget.onResetCurrent : null,
-                icon: const Icon(Icons.restart_alt_rounded, size: 16),
-                label: Text(
-                  context.bheText(widget.editingNet ? '恢复篮网区' : '恢复投篮区'),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    key: const Key('hoop-example-open'),
+                    onPressed: () => showHoopExampleDialog(context),
+                    icon: const Icon(Icons.image_outlined, size: 16),
+                    label: Text(context.bheText('看示例')),
+                  ),
+                  TextButton.icon(
+                    onPressed: widget.enabled ? widget.onResetCurrent : null,
+                    icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                    label: Text(
+                      context.bheText(switch (widget.editingTarget) {
+                        _RoiEditTarget.shot => '恢复投篮区',
+                        _RoiEditTarget.net => '恢复篮网区',
+                        _RoiEditTarget.person => '清除人物区',
+                      }),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
           ),
           const SizedBox(height: Spacing.xs),
           Text(
-            widget.editingNet
-                ? context.bheText(
-                    '当前编辑白色篮网区域：覆盖篮圈下方到网底，尽量不要包含篮板、球员或地面。',
-                  )
-                : context.bheText(
-                    '当前编辑橙色投篮分析区域：覆盖来球轨迹、篮圈和篮网下方的落球范围。',
-                  ),
+            context.bheText(switch (widget.editingTarget) {
+              _RoiEditTarget.shot =>
+                '当前编辑橙色投篮分析区域：覆盖来球轨迹、篮圈和篮网下方的落球范围。',
+              _RoiEditTarget.net =>
+                '当前编辑白色篮网区域：覆盖篮圈下方到网底，尽量不要包含篮板、球员或地面。',
+              _RoiEditTarget.person =>
+                '当前编辑紫色人物分析区域（可选）：覆盖画面中球员活动范围，人物识别与最后触球分析会优先使用；不设置则自动用投篮分析区。',
+            }),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: c.textSecondary,
               height: 1.4,
@@ -2766,6 +2878,7 @@ class _SummaryStep extends StatelessWidget {
     required this.endMs,
     required this.roi,
     required this.netRoi,
+    required this.personRoi,
     required this.analysisMode,
     required this.beforeSeconds,
     required this.afterSeconds,
@@ -2781,6 +2894,7 @@ class _SummaryStep extends StatelessWidget {
   final int endMs;
   final Rect? roi;
   final Rect? netRoi;
+  final Rect? personRoi;
   final String analysisMode;
   final int beforeSeconds;
   final int afterSeconds;
@@ -2920,6 +3034,14 @@ class _SummaryStep extends StatelessWidget {
                       ? context.bheText('自动推荐')
                       : context.bheText('已设置'),
                   c.textPrimary,
+                  true,
+                ),
+                regionLine(
+                  context.bheText('人物分析区（可选）'),
+                  personRoi == null
+                      ? context.bheText('未设置，自动回退投篮区')
+                      : context.bheText('已设置'),
+                  _personRoiColor,
                   true,
                 ),
               ],
@@ -4279,6 +4401,9 @@ class _RoiCanvas extends StatefulWidget {
     required this.onRefreshPreview,
     required this.onChanged,
     required this.onEditComplete,
+    this.tertiaryRoi,
+    this.tertiaryColor,
+    this.tertiaryLabel,
     this.videoController,
     this.rotation = 0,
   });
@@ -4290,6 +4415,11 @@ class _RoiCanvas extends StatefulWidget {
   final int rotation;
   final Rect? roi;
   final Rect? secondaryRoi;
+
+  /// 可选的第三区域（人物分析区），只绘制不拦截手势。
+  final Rect? tertiaryRoi;
+  final Color? tertiaryColor;
+  final String? tertiaryLabel;
   final Color activeColor;
   final Color secondaryColor;
   final String activeLabel;
@@ -4528,6 +4658,16 @@ class _RoiCanvasState extends State<_RoiCanvas> {
                                           ),
                                   ),
                                 ),
+                              Positioned.fill(
+                                child: CustomPaint(
+                                  painter: _RoiPainter(
+                                    roi: widget.tertiaryRoi,
+                                    color: widget.tertiaryColor ?? Colors.white,
+                                    label: widget.tertiaryLabel ?? '',
+                                    viewportScale: _zoom,
+                                  ),
+                                ),
+                              ),
                               Positioned.fill(
                                 child: CustomPaint(
                                   painter: _RoiPainter(
