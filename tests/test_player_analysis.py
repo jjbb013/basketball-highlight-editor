@@ -158,3 +158,29 @@ def test_release_point_inference_rejects_ambiguous_nearest_holders():
     result = analyze_player_event(frames, 600, LocalIdentityModel())
     assert result["touch"]["status"] == "review"
     assert result["identity"]["identity_id"] is None
+
+
+def test_inferred_touch_relaxes_clothing_veto_into_reviewable_match():
+    model = LocalIdentityModel()
+    first = analyze_player_event(shot_frames(), 600, model)
+    assert first["identity"]["identity_id"] is not None
+    # 同一人的出手帧：上衣采样带被姿态污染（区域距离 0.2），走推断路径。
+    frames = occluded_shot_frames()
+    for frame in frames:
+        for one in frame["people"]:
+            one["appearance"] = appearance(0.8, 0.6)
+    second = analyze_player_event(frames, 600, model)
+    assert second["touch"]["status"] == "inferred"
+    assert second["identity"]["identity_id"] == first["identity"]["identity_id"]
+    assert second["identity"]["needs_review"] is True
+    assert second["needs_review"] is True
+
+
+def test_identified_touch_keeps_strict_clothing_veto():
+    model = LocalIdentityModel()
+    first = analyze_player_event(shot_frames(), 600, model)
+    assert first["identity"]["identity_id"] is not None
+    # 完整触球证据但上衣冲突：自动路径维持不误并他人的保护。
+    second = analyze_player_event(shot_frames(color=appearance(0.8, 0.6)), 600, model)
+    assert second["touch"]["status"] == "identified"
+    assert second["identity"]["identity_id"] is None

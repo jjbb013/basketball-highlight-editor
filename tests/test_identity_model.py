@@ -91,3 +91,23 @@ def test_observe_rejects_empty_identity_or_features():
 def test_unsupported_serialized_model_is_rejected():
     with pytest.raises(ValueError, match="IDENTITY_MODEL_VERSION_UNSUPPORTED"):
         LocalIdentityModel.from_dict({"version": 999, "prototypes": {}})
+
+
+def test_relaxed_clothing_assign_matches_with_review_and_flags_conflict():
+    model = LocalIdentityModel()
+    regions = {name: (1.0, 0.0, 0.0) for name in
+               ('hair', 'face', 'skin', 'shirt', 'pants', 'shoes')}
+    first = model.assign(appearance_vector(regions, {name: 1.0 for name in regions}))
+    model.observe(first['identity_id'], appearance_vector(
+        regions, {name: 1.0 for name in regions},
+    ))
+    conflicting = dict(regions, shirt=(0.8, 0.6, 0.0))
+    feats = appearance_vector(conflicting, {name: 1.0 for name in regions})
+
+    strict = model.assign(feats)
+    assert strict['identity_id'] is None
+
+    relaxed = model.assign(feats, strict_clothing=False)
+    assert relaxed['identity_id'] == first['identity_id']
+    assert relaxed['needs_review'] is True
+    assert relaxed['clothing_conflict'] is True

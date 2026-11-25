@@ -264,8 +264,12 @@ def analyze_player_event(
         ]
     features = _aggregate_appearance(appearance_samples)
     if features:
-        identity = identity_model.assign(features)
-        if identity["identity_id"] is not None:
+        # 推断触球必然人工复核：衣着冲突降级为待复核匹配而不是隐藏候选；
+        # 连续触球判定的自动路径保持严格，衣着冲突仍不自动归并。
+        identity = identity_model.assign(
+            features, strict_clothing=touch["status"] == "identified",
+        )
+        if identity["identity_id"] is not None and not identity.get("clothing_conflict"):
             identity_model.observe(identity["identity_id"], features)
     needs_review = (
         touch["status"] != "identified"

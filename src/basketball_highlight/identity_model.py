@@ -43,7 +43,7 @@ class LocalIdentityModel:
     def new_identity_id() -> str:
         return f"identity_{uuid4().hex}"
 
-    def assign(self, features: Mapping) -> dict:
+    def assign(self, features: Mapping, *, strict_clothing: bool = True) -> dict:
         features = _validated_features(features)
         if not features:
             return _result(None, 0.0, True, None, [])
@@ -78,11 +78,15 @@ class LocalIdentityModel:
         if second_distance is not None and second_distance - distance < self.margin:
             return _result(None, 0.0, True, second_distance, alternatives)
         if distance <= self.threshold:
-            if clothing_conflict:
+            # 出手/起跳姿态会移位全部衣着采样带；强制复核的推断路径放宽衣着否决，
+            # 由人工在人物复核页确认分组，但冲突样本不并入原型。
+            if clothing_conflict and strict_clothing:
                 # A weighted average must not hide reliable clothing disagreement.
                 return _result(None, 0.0, True, second_distance, alternatives)
             confidence = (1.0 - distance / self.threshold) * min(1.0, weight)
-            return _result(identity_id, confidence, False, second_distance, alternatives)
+            result = _result(identity_id, confidence, clothing_conflict, second_distance, alternatives)
+            result["clothing_conflict"] = clothing_conflict
+            return result
         if distance > self.threshold + self.margin:
             return _result(
                 self.new_identity_id(), 0.0, True, second_distance, alternatives, True,
