@@ -106,3 +106,55 @@ def test_no_release_evidence_or_no_appearance_never_becomes_an_automatic_identit
     assert no_appearance["identity"]["identity_id"] is None
     assert no_appearance["needs_review"] is True
     assert no_appearance["model"]["prototypes"] == {}
+
+
+def occluded_shot_frames(*, second_person_ratio=None):
+    """Ball invisible in the hands, first tracked right at the release."""
+    frames = []
+    for time_ms in range(0, 601, 100):
+        if time_ms < 400:
+            ball = None  # 持球/运球阶段被身体遮挡
+        elif time_ms == 400:
+            ball = [160, 190]  # 出手瞬间：球刚离手，仍在手腕旁
+        elif time_ms == 500:
+            ball = [300, 150]
+        else:
+            ball = [450, 120]
+        people = [person(100)]
+        if second_person_ratio is not None:
+            # 第二人的手腕按指定比例贴近球（仅出手帧有意义）。
+            wrist_x = 160 + second_person_ratio * 300
+            other = person(700, color=appearance(0, 1))
+            other["wrists"] = [[wrist_x, 190, 0.95]]
+            people.append(other)
+        frames.append({"time_ms": time_ms, "ball": ball, "people": people})
+    return frames
+
+
+def test_release_point_nearest_wrist_becomes_reviewable_identity_when_tracking_lost():
+    result = analyze_player_event(occluded_shot_frames(), 600, LocalIdentityModel())
+    # 单帧接触不满足连续触球判定的时长要求，走兜底归因。
+    assert result["touch"]["status"] == "inferred"
+    assert result["touch"]["touch_time_ms"] == 400
+    assert result["touch"]["needs_review"] is True
+    assert result["identity"]["identity_id"] is not None
+    assert result["identity"]["new_identity"] is True
+    assert result["needs_review"] is True
+    assert result["appearance_samples"] > 0
+
+
+def test_release_point_inference_rejects_when_nearest_wrist_is_far_from_ball():
+    frames = [
+        dict(frame, ball=[700, 180] if frame["time_ms"] >= 400 else None)
+        for frame in occluded_shot_frames()
+    ]
+    result = analyze_player_event(frames, 600, LocalIdentityModel())
+    assert result["touch"]["status"] == "review"
+    assert result["identity"]["identity_id"] is None
+
+
+def test_release_point_inference_rejects_ambiguous_nearest_holders():
+    frames = occluded_shot_frames(second_person_ratio=0.1)
+    result = analyze_player_event(frames, 600, LocalIdentityModel())
+    assert result["touch"]["status"] == "review"
+    assert result["identity"]["identity_id"] is None

@@ -7,6 +7,33 @@ from typing import Any
 
 from .inference import load_detector
 
+# 出手/封盖等手臂高举姿态下，人物框上段的衣服采样带会混入手臂和球，
+# 上衣颜色分布系统性失真；此时降低上衣特征质量，避免衣着冲突守卫误否决同一人。
+RAISED_WRIST_CONFIDENCE = 0.4
+RAISED_WRIST_TOP_RATIO = 0.25
+RAISED_ARM_SHIRT_QUALITY = 0.25
+
+
+def adjust_appearance_for_pose(person: dict) -> None:
+    """Down-weight the shirt region when a confident wrist is raised."""
+    appearance = person.get("appearance") or {}
+    shirt = appearance.get("shirt")
+    if not shirt:
+        return
+    try:
+        bbox = person["bbox"]
+        top, height = float(bbox[1]), max(1.0, float(bbox[3]) - float(bbox[1]))
+    except (KeyError, IndexError, TypeError, ValueError):
+        return
+    raised = any(
+        len(wrist) >= 3
+        and float(wrist[2]) >= RAISED_WRIST_CONFIDENCE
+        and float(wrist[1]) <= top + RAISED_WRIST_TOP_RATIO * height
+        for wrist in person.get("wrists") or []
+    )
+    if raised:
+        shirt["quality"] = float(shirt.get("quality", 0.0)) * RAISED_ARM_SHIRT_QUALITY
+
 
 def _values(value):
     if value is None:
@@ -110,5 +137,6 @@ class PoseDetector:
                     person["appearance"] = image_appearance(
                         image, person["bbox"], quality=person["detection_confidence"],
                     )
+                    adjust_appearance_for_pose(person)
             output.append(people)
         return output

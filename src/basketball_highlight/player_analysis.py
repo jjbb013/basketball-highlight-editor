@@ -13,8 +13,15 @@ from .appearance import appearance_distance, appearance_vector
 from .identity_model import LocalIdentityModel
 from .last_touch import select_last_touch
 
-ALGORITHM_VERSION = "yolo-pose-last-touch-local-appearance-v3"
+ALGORITHM_VERSION = "yolo-pose-last-touch-local-appearance-v4"
 MAX_TRACK_GAP_MS = 350
+
+# 出手点兜底归因：持球阶段球被身体遮挡时，连续触球判定找不到候选；
+# 已验证轨迹的起点就是出手瞬间，此刻手腕离球最近的人就是投篮人。
+RELEASE_INFERENCE_MAX_RATIO = 0.5
+RELEASE_INFERENCE_MIN_MARGIN = 0.15
+RELEASE_INFERENCE_WINDOW_MS = 2500
+MIN_INFERENCE_WRIST_CONFIDENCE = 0.4
 
 
 def identity_model_from_rows(rows: Sequence[Mapping[str, Any]]) -> LocalIdentityModel:
@@ -156,6 +163,71 @@ def _aggregate_appearance(observations: Sequence[Mapping[str, Any]]) -> dict:
     return appearance_vector(regions, qualities) if regions else {}
 
 
+def _release_holder(
+    observations: Sequence[Mapping[str, Any]], event_time_ms: int,
+) -> dict[str, Any] | None:
+    """Infer the shooter from the start of the verified ball path.
+
+    Continuous wrist-contact inference needs the ball tracked into the hands,
+    which occlusion during possession often breaks. The verified trajectory
+    starts at the release, where the shooter's wrist is right next to the
+    ball. The inference is distance-gated and margin-gated so a contested or
+    already-released ball never becomes a guess, and it always stays
+    reviewable instead of silently upgrading to an automatic identity.
+    """
+    candidates = []
+    for person in observations:
+        ball = person.get("ball")
+        if ball is None:
+            continue
+        try:
+            time_ms = int(person["time_ms"])
+            bbox = person["bbox"]
+            height = max(1.0, float(bbox[3]) - float(bbox[1]))
+        except (KeyError, IndexError, TypeError, ValueError):
+            continue
+        if not 0 <= event_time_ms - time_ms <= RELEASE_INFERENCE_WINDOW_MS:
+            continue
+        wrists = [
+            wrist for wrist in person.get("wrists") or []
+            if len(wrist) >= 3 and float(wrist[2]) >= MIN_INFERENCE_WRIST_CONFIDENCE
+        ]
+        if not wrists:
+            continue
+        ratio = min(
+            math.hypot(float(ball[0]) - float(wrist[0]), float(ball[1]) - float(wrist[1])) / height
+            for wrist in wrists
+        )
+        candidates.append({
+            "track_id": str(person["track_id"]),
+            "time_ms": time_ms,
+            "ratio": ratio,
+        })
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item["ratio"], item["time_ms"], item["track_id"]))
+    best = candidates[0]
+    if best["ratio"] > RELEASE_INFERENCE_MAX_RATIO:
+        return None
+    runner_up = next(
+        (item for item in candidates[1:] if item["track_id"] != best["track_id"]),
+        None,
+    )
+    if runner_up is not None and runner_up["ratio"] - best["ratio"] < RELEASE_INFERENCE_MIN_MARGIN:
+        return None
+    return {
+        "status": "inferred",
+        "local_track_id": best["track_id"],
+        "touch_time_ms": best["time_ms"],
+        "confidence": round(0.45 * (1.0 - best["ratio"] / RELEASE_INFERENCE_MAX_RATIO), 6),
+        "contact_start_ms": None,
+        "release_time_ms": None,
+        "bridged_detection_gap": False,
+        "needs_review": True,
+        "alternatives": [],
+    }
+
+
 def analyze_player_event(
     frames: Sequence[Mapping[str, Any]],
     event_time_ms: int,
@@ -171,6 +243,10 @@ def analyze_player_event(
         if 0 <= event_time_ms - int(person["time_ms"]) <= 6000
     ]
     touch = select_last_touch(linked)
+    if touch["status"] != "identified":
+        inferred = _release_holder(linked, event_time_ms)
+        if inferred is not None:
+            touch = inferred
     identity = {
         "identity_id": None,
         "confidence": 0.0,
@@ -180,7 +256,7 @@ def analyze_player_event(
         "alternative_identity_ids": [],
     }
     appearance_samples = []
-    if touch["status"] == "identified":
+    if touch.get("local_track_id") is not None and touch.get("touch_time_ms") is not None:
         appearance_samples = [
             person for person in linked
             if person["track_id"] == touch["local_track_id"]

@@ -75,3 +75,29 @@ def test_image_features_distinguish_different_shirts():
 def test_tiny_person_crop_has_no_appearance_evidence():
     image = Image.new("RGB", (8, 8), (200, 30, 30))
     assert image_appearance(image, (0, 0, 8, 8)) == {}
+
+
+def test_raised_wrist_downweights_shirt_quality_for_release_pose():
+    from basketball_highlight.pose import adjust_appearance_for_pose
+
+    def release_person(wrist_y, wrist_conf=0.9):
+        return {
+            "bbox": [100, 200, 220, 500],  # 高 300，顶部 200
+            "wrists": [[160, wrist_y, wrist_conf]],
+            "appearance": {"shirt": {"values": [1.0, 0.0], "quality": 0.8}},
+        }
+
+    raised = release_person(wrist_y=230)  # 手腕在顶部 25% 内（出手姿态）
+    adjust_appearance_for_pose(raised)
+    assert raised["appearance"]["shirt"]["quality"] == pytest.approx(0.8 * 0.25)
+
+    standing = release_person(wrist_y=420)  # 手腕在腰侧（正常姿态）
+    adjust_appearance_for_pose(standing)
+    assert standing["appearance"]["shirt"]["quality"] == pytest.approx(0.8)
+
+    low_conf = release_person(wrist_y=230, wrist_conf=0.2)  # 低置信手腕不算数
+    adjust_appearance_for_pose(low_conf)
+    assert low_conf["appearance"]["shirt"]["quality"] == pytest.approx(0.8)
+
+    no_shirt = {"bbox": [0, 0, 10, 100], "wrists": [[5, 5, 0.9]], "appearance": {}}
+    adjust_appearance_for_pose(no_shirt)  # 无上衣区域时不报错
