@@ -6,7 +6,7 @@ BHE Pro 是 [BHE（Basketball Highlight Editor）](README.md) 的二次开发版
 - 平台：macOS（Apple Silicon + Intel，DMG 安装包）
 - 运行方式不变：完全本地分析，原视频不上传
 
-> 最新已发布的安装包见 [Releases · v0.1.18-macos.1](https://github.com/jjbb013/basketball-highlight-editor/releases/tag/v0.1.18-macos.1)：人物复核页新增触球时刻封面与一键播放片段，复核身份不再只靠文字。历史版本见 [Releases 页面](https://github.com/jjbb013/basketball-highlight-editor/releases)。
+> 最新已发布的安装包见 [Releases · v0.1.19-macos.1](https://github.com/jjbb013/basketball-highlight-editor/releases/tag/v0.1.19-macos.1)：修复大部分进球无法识别人物的问题（出手瞬间就近归因 + 出手姿态衣着特征修正）。历史版本见 [Releases 页面](https://github.com/jjbb013/basketball-highlight-editor/releases)。
 
 ## 与原版 BHE 的差异一览
 
@@ -79,6 +79,7 @@ BHE Pro 是 [BHE（Basketball Highlight Editor）](README.md) 的二次开发版
 - [x] 人物分析区（可选紫色区域，限定人物识别范围）
 - [x] 人物复核页（身份分组、命名传播、待复核/已命名筛选、单条修正）
 - [x] 人物复核页可视化：身份组与候选显示触球时刻封面，一键跳回投篮审核播放片段（v0.1.18）
+- [x] 人物识别覆盖率修复：出手瞬间就近归因兜底 + 出手姿态衣着特征降权（v0.1.19）
 - [x] 跨天合并导出（多选历史项目，同名球员片段合并进同一集锦）
 
 ### 已知边界与下一步
