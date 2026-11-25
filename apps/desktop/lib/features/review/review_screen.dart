@@ -148,6 +148,43 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     setState(() => _replayToken++);
   }
 
+  /// 人物复核页点「查看投篮片段」后，这里消费焦点请求：清掉会挡住目标
+  /// 候选的筛选，选中并播放它。请求在状态里只保留到被消费为止。
+  void _consumeReviewFocusRequest(ProjectState state) {
+    final focusId = state.reviewFocusCandidateId;
+    if (focusId == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(projectProvider).reviewFocusCandidateId == null) return;
+      ref.read(projectProvider.notifier).clearReviewFocus();
+      final all = _orderedCandidates(ref.read(projectProvider).candidates);
+      Map<String, dynamic>? target;
+      for (final candidate in all) {
+        if (candidate['id']?.toString() == focusId) {
+          target = candidate;
+          break;
+        }
+      }
+      if (target == null) return;
+      final visible = _filterCandidates(
+        _filterCandidates(all, _candidateFilter),
+        'all',
+        playerFilter: _playerFilter,
+        rimFilter: _rimFilter,
+        segmentFilter: _segmentFilter,
+      );
+      if (!visible.any((candidate) => candidate['id']?.toString() == focusId)) {
+        _changeFilters(
+          status: 'all',
+          player: 'all',
+          rim: 'all',
+          segment: 'all',
+        );
+      }
+      _selectCandidate(target);
+    });
+  }
+
   void _toggleVideoSource() {
     // 能否切换只看实际会播放的源。导入页静帧(previewPath)不参与审核播放，
     // 多段项目导入后它已经被清空，不能用它判断可切换状态。
@@ -695,6 +732,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final state = ref.watch(projectProvider);
     final notifier = ref.read(projectProvider.notifier);
     _syncPreviewScope(state);
+    _consumeReviewFocusRequest(state);
     final allCandidates = _orderedCandidates(state.candidates);
     if (_playerFilter.startsWith('player:') &&
         !state.players.any(

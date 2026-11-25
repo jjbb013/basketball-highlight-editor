@@ -1762,6 +1762,7 @@ const _englishText = <String, String>{
   '含人工标记': 'Includes manual marks',
   '命名为球员': 'Name as player',
   '查看投篮片段': 'View shot clips',
+  '播放此片段': 'Play this clip',
   '修正此条': 'Adjust this entry',
   '清除修正': 'Clear adjustment',
   '确认命名': 'Confirm name',

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bhe_l10n/bhe_l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import '../../core/engine_session.dart' show JsonMap;
 import '../../providers/project_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/tokens.dart';
+import 'candidate_cover.dart';
 import 'people_review.dart';
 
 enum _PeopleFilter { all, review, named }
@@ -25,6 +28,67 @@ class PeopleReviewScreen extends ConsumerStatefulWidget {
 
 class _PeopleReviewScreenState extends ConsumerState<PeopleReviewScreen> {
   _PeopleFilter _filter = _PeopleFilter.all;
+
+  /// 封面加载与审核页同一套边界：最多 2 个并发，结果按候选+时刻缓存。
+  final Map<String, Future<String?>> _coverCache = <String, Future<String?>>{};
+  final List<Future<void> Function()> _coverQueue = <Future<void> Function()>[];
+  int _activeCoverLoads = 0;
+
+  @override
+  void dispose() {
+    _coverQueue.clear();
+    _coverCache.clear();
+    super.dispose();
+  }
+
+  Future<String?> _loadCover(PeopleReviewCandidate candidate) {
+    final timeMs = candidate.coverTimeMs ?? 0;
+    final key = '${candidate.id}:$timeMs';
+    return _coverCache.putIfAbsent(key, () {
+      final completer = Completer<String?>();
+      _coverQueue.add(() async {
+        if (!mounted) {
+          completer.complete(null);
+          return;
+        }
+        try {
+          final path = await ref
+              .read(projectProvider.notifier)
+              .loadCandidatePreview(candidate.id, timeMs);
+          if (!completer.isCompleted) completer.complete(path);
+        } catch (_) {
+          // 封面只是复核辅助：引擎忙或取图失败时显示占位图，不影响命名与修正。
+          if (!completer.isCompleted) completer.complete(null);
+        }
+      });
+      _drainCoverQueue();
+      return completer.future;
+    });
+  }
+
+  void _drainCoverQueue() {
+    if (!mounted) {
+      _coverQueue.clear();
+      return;
+    }
+    while (_activeCoverLoads < 2 && _coverQueue.isNotEmpty) {
+      final request = _coverQueue.removeAt(0);
+      _activeCoverLoads++;
+      unawaited(
+        request().whenComplete(() {
+          _activeCoverLoads--;
+          _drainCoverQueue();
+        }),
+      );
+    }
+  }
+
+  /// 跳到投篮审核并选中该候选，审核页会自动播放对应片段。
+  void _openCandidate(PeopleReviewCandidate candidate) {
+    if (candidate.id.isEmpty) return;
+    ref.read(projectProvider.notifier).requestReviewFocus(candidate.id);
+    context.go('/review');
+  }
 
   Future<void> _nameGroup(PeopleReviewGroup group) async {
     final name = await showDialog<String>(
@@ -141,7 +205,8 @@ class _PeopleReviewScreenState extends ConsumerState<PeopleReviewScreen> {
                       players: state.players,
                       busy: busy,
                       onName: () => _nameGroup(groups[index]),
-                      onOpenClips: () => context.go('/review'),
+                      coverLoader: _loadCover,
+                      onOpenCandidate: _openCandidate,
                       onReassignCandidate: _applyCandidateValue,
                     ),
                   ),
@@ -158,7 +223,8 @@ class _PeopleGroupCard extends StatelessWidget {
     required this.players,
     required this.busy,
     required this.onName,
-    required this.onOpenClips,
+    required this.coverLoader,
+    required this.onOpenCandidate,
     required this.onReassignCandidate,
   });
 
@@ -166,7 +232,8 @@ class _PeopleGroupCard extends StatelessWidget {
   final List<JsonMap> players;
   final bool busy;
   final VoidCallback onName;
-  final VoidCallback onOpenClips;
+  final Future<String?> Function(PeopleReviewCandidate candidate) coverLoader;
+  final void Function(PeopleReviewCandidate candidate) onOpenCandidate;
   final void Function(PeopleReviewCandidate candidate, String value)
   onReassignCandidate;
 
@@ -194,6 +261,11 @@ class _PeopleGroupCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              CandidateCover(
+                key: Key('people-group-cover-${group.identityId}'),
+                future: coverLoader(group.candidates.first),
+              ),
+              const SizedBox(width: Spacing.sm),
               Container(
                 width: 26,
                 height: 26,
@@ -270,7 +342,7 @@ class _PeopleGroupCard extends StatelessWidget {
               ),
               TextButton.icon(
                 key: Key('people-open-${group.identityId}'),
-                onPressed: onOpenClips,
+                onPressed: () => onOpenCandidate(group.candidates.first),
                 icon: const Icon(Icons.play_circle_outline, size: 15),
                 label: Text(
                   context.bheText('查看投篮片段'),
@@ -285,6 +357,16 @@ class _PeopleGroupCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
                 children: [
+                  GestureDetector(
+                    onTap: () => onOpenCandidate(candidate),
+                    child: CandidateCover(
+                      key: Key('people-cover-${candidate.id}'),
+                      future: coverLoader(candidate),
+                      width: 64,
+                      height: 36,
+                    ),
+                  ),
+                  const SizedBox(width: Spacing.sm),
                   Icon(
                     candidate.isManuallyAssigned
                         ? Icons.person_pin_outlined
@@ -306,6 +388,19 @@ class _PeopleGroupCard extends StatelessWidget {
                           ? c.orange
                           : c.textSecondary,
                     ),
+                  ),
+                  IconButton(
+                    key: Key('people-play-${candidate.id}'),
+                    onPressed: () => onOpenCandidate(candidate),
+                    icon: const Icon(Icons.play_circle_outline, size: 16),
+                    color: c.textSecondary,
+                    tooltip: context.bheText('播放此片段'),
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                    padding: EdgeInsets.zero,
                   ),
                   PopupMenuButton<String>(
                     key: Key('people-candidate-${candidate.id}'),

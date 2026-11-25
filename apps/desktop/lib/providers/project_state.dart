@@ -118,6 +118,7 @@ class ProjectState {
     this.lastQueueAllCompleted = false,
     this.exportQueued = false,
     this.exportStartUnconfirmed = false,
+    this.reviewFocusCandidateId,
   });
 
   final JsonMap? video;
@@ -173,6 +174,9 @@ class ProjectState {
   /// 队列分析时点了导出：等当前这段分析完先导出，再继续排队。
   final bool exportQueued;
   final bool exportStartUnconfirmed;
+
+  /// 人物复核页请求审核页选中并播放的候选 id；审核页消费后清除。
+  final String? reviewFocusCandidateId;
 
   bool get multiVideo => videos.length > 1;
 
@@ -230,6 +234,7 @@ class ProjectState {
     bool? lastQueueAllCompleted,
     bool? exportQueued,
     bool? exportStartUnconfirmed,
+    Object? reviewFocusCandidateId = _unset,
     List<JsonMap>? candidates,
     List<JsonMap>? players,
     List<JsonMap>? recentProjects,
@@ -312,6 +317,9 @@ class ProjectState {
       exportQueued: exportQueued ?? this.exportQueued,
       exportStartUnconfirmed:
           exportStartUnconfirmed ?? this.exportStartUnconfirmed,
+      reviewFocusCandidateId: identical(reviewFocusCandidateId, _unset)
+          ? this.reviewFocusCandidateId
+          : reviewFocusCandidateId as String?,
     );
   }
 }
@@ -2336,6 +2344,18 @@ class ProjectNotifier extends Notifier<ProjectState> {
           videoId: candidate?['video_id']?.toString(),
         );
     return preview['path']?.toString();
+  }
+
+  /// 人物复核页点「查看投篮片段」时，让审核页选中并播放对应候选。
+  void requestReviewFocus(String candidateId) {
+    if (_disposed || candidateId.isEmpty) return;
+    state = state.copyWith(reviewFocusCandidateId: candidateId);
+  }
+
+  /// 审核页消费焦点请求后清除，避免下次进入审核页时重复跳转。
+  void clearReviewFocus() {
+    if (_disposed || state.reviewFocusCandidateId == null) return;
+    state = state.copyWith(reviewFocusCandidateId: null);
   }
 
   Future<void> refreshStatistics({

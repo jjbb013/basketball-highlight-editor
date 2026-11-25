@@ -8,6 +8,9 @@ class PeopleReviewCandidate {
     required this.playerId,
     required this.playerName,
     required this.assignmentSource,
+    required this.videoId,
+    required this.eventTimeMs,
+    required this.previewPath,
   });
 
   factory PeopleReviewCandidate.fromJson(JsonMap candidate) => PeopleReviewCandidate._(
@@ -16,6 +19,9 @@ class PeopleReviewCandidate {
     playerId: candidate['player_id']?.toString(),
     playerName: candidate['player_name']?.toString(),
     assignmentSource: candidate['assignment_source']?.toString() ?? '',
+    videoId: candidate['video_id']?.toString(),
+    eventTimeMs: (candidate['event_time_ms'] as num?)?.toInt(),
+    previewPath: candidate['preview_path']?.toString(),
   );
 
   final String id;
@@ -23,6 +29,14 @@ class PeopleReviewCandidate {
   final String? playerId;
   final String? playerName;
   final String assignmentSource;
+  final String? videoId;
+  final int? eventTimeMs;
+
+  /// 分析时已生成的候选封面（进球时刻静帧）；可能不存在或已被清理。
+  final String? previewPath;
+
+  /// 封面取图时刻：优先最后触球（人持球、最容易认出是谁），否则用进球时刻。
+  int? get coverTimeMs => touchTimeMs ?? eventTimeMs;
 
   /// 人工改派的片段永远优先于自动身份，不会被自动命名覆盖。
   bool get isManuallyAssigned => assignmentSource == 'manual';

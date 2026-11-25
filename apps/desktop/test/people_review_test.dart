@@ -10,6 +10,9 @@ JsonMap _candidate({
   String? playerId,
   String? playerName,
   String assignmentSource = 'auto',
+  String? videoId,
+  int? eventMs,
+  String? previewPath,
 }) => <String, dynamic>{
   'id': id,
   if (identityId != null) 'identity_id': identityId,
@@ -17,6 +20,9 @@ JsonMap _candidate({
   if (playerId != null) 'player_id': playerId,
   if (playerName != null) 'player_name': playerName,
   'assignment_source': assignmentSource,
+  if (videoId != null) 'video_id': videoId,
+  if (eventMs != null) 'event_time_ms': eventMs,
+  if (previewPath != null) 'preview_path': previewPath,
 };
 
 void main() {
@@ -81,5 +87,28 @@ void main() {
   test('formatTouchTime 输出分:秒', () {
     expect(formatTouchTime(65_200), '1:05.2');
     expect(formatTouchTime(null), '时间未知');
+  });
+
+  test('封面时刻优先取最后触球，缺触球时回退进球时刻', () {
+    final groups = buildPeopleReviewGroups([
+      _candidate(
+        id: 'c1',
+        identityId: 'identity_a',
+        touchMs: 3000,
+        eventMs: 5000,
+        videoId: 'v1',
+        previewPath: '/tmp/c1.jpg',
+      ),
+      _candidate(id: 'c2', identityId: 'identity_a', eventMs: 8000),
+    ]);
+
+    final byId = {
+      for (final candidate in groups.single.candidates) candidate.id: candidate,
+    };
+    expect(byId['c1']!.coverTimeMs, 3000);
+    expect(byId['c1']!.videoId, 'v1');
+    expect(byId['c1']!.previewPath, '/tmp/c1.jpg');
+    expect(byId['c2']!.coverTimeMs, 8000);
+    expect(byId['c2']!.previewPath, isNull);
   });
 }
